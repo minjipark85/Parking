@@ -11,16 +11,17 @@
   <meta name="apple-mobile-web-app-title" content="예약 조회">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="app">
   <header class="top">
     <h1>차량 예약 조회</h1>
     <div class="top-right">
+      <div class="net" id="netStatus" data-s="info"><i></i><span>준비 중…</span></div>
       <div class="today" id="today"></div>
       <button type="button" class="icon-btn" id="fsBtn" hidden aria-label="전체 화면">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
@@ -78,20 +79,34 @@
         </div>
         <div class="ledger-head">
           <div class="seg" role="group" aria-label="보기">
-            <button type="button" id="vUp" aria-pressed="true">오늘 이후</button>
-            <button type="button" id="vAll" aria-pressed="false">전체</button>
+            <button type="button" id="vToday" aria-pressed="true">오늘</button>
+            <button type="button" id="vUp" aria-pressed="false">오늘 이후</button>
           </div>
           <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
         </div>
         <div id="ledger" class="ledger"><p class="empty">예약 목록을 불러오는 중…</p></div>
+        <details class="file-box" id="fileBox">
+          <summary>예약 파일 (CSV) <span id="fileCount"></span></summary>
+          <div class="file-actions">
+            <label class="btn small" id="csvBtn">
+              <span>예약 파일 불러오기 (CSV)</span>
+              <input id="csvInput" type="file" accept=".csv,text/csv,text/plain">
+            </label>
+            <button type="button" class="small" id="clearFile" hidden>파일 예약 지우기</button>
+          </div>
+          <p class="file-info" id="fileInfo"></p>
+          <p class="file-msg" id="fileMsg" role="status"></p>
+          <p class="file-help">형식: 예약일자,예약시간,차량번호 — 예) 2026-10-20,09:00,12가3456 (엑셀에서 CSV로 저장한 파일도 됩니다)</p>
+        </details>
       </div>
     </section>
   </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="config.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<!-- 모든 라이브러리를 앱 안(vendor)에 포함 — 인터넷 없이 동작 -->
+<script src="vendor/supabase/supabase.js"></script>
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

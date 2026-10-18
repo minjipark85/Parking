@@ -230,3 +230,26 @@ button:focus-visible, .btn:focus-within, input:focus-visible { outline: 3px soli
   .result .dot { animation: none !important; }
   .cam { transition: none; }
 }
+
+/* ---------- 연결 상태 · 예약 파일 ---------- */
+.net { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); max-width: 100%; }
+.net i { width: 9px; height: 9px; border-radius: 50%; background: var(--idle); flex: none; }
+.net[data-s="ok"] i { background: var(--ok); }
+.net[data-s="warn"] { background: var(--warn-soft); border-color: var(--warn); }
+.net[data-s="warn"] i { background: var(--warn); }
+.net[data-s="bad"] { background: var(--bad-soft); border-color: var(--bad); }
+.net[data-s="bad"] i { background: var(--bad); }
+.net[data-s="info"] i { background: var(--accent); }
+.top-right { flex-wrap: wrap; justify-content: flex-end; }
+.file-box { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; display: grid; gap: 6px; }
+.file-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button.small, .btn.small { min-height: 44px; font-size: 14px; padding: 0 14px; }
+#clearFile.arm { color: var(--bad); border-color: var(--bad); }
+.file-info, .file-msg { margin: 0; font-size: 13px; color: var(--muted); }
+.file-msg.ok { color: var(--ok); } .file-msg.err { color: var(--bad); }
+.file-msg:empty, .file-info:empty { display: none; }
+@media (orientation: landscape) and (max-height: 520px) { .file-box { display: none; } .net { font-size: 12px; padding: 4px 10px; } }
+.file-box summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; gap: 6px; }
+.file-box[open] summary { margin-bottom: 4px; }
+.file-box summary span { font-weight: 500; }
+.file-help { margin: 0; font-size: 12px; color: var(--muted); }

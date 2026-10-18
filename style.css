@@ -153,3 +153,8 @@ label input {
 .chip.before { color: var(--warn); background: var(--warn-soft); }
 .chip.after { color: var(--muted); background: var(--bg); }
 @media (max-width: 420px) { .row { grid-template-columns: 94px 1fr auto; } .row .t { font-size: 13px; } }
+
+/* 겹치는 순서: 영상 < 가이드 < 안내/상태 */
+.cam video { position: relative; z-index: 0; }
+.cam .guide { z-index: 1; }
+.cam-idle, .cam-status { z-index: 2; }

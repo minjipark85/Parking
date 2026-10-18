@@ -193,8 +193,19 @@
       return;
     }
     video.srcObject = stream;
-    await video.play();
+    video.muted = true;
+    video.setAttribute("playsinline", "");
+    // CSS가 예전 것으로 남아 있어도 안내 화면이 영상을 덮지 않도록 직접 숨긴다
     $("camIdle").hidden = true;
+    $("camIdle").style.display = "none";
+    try { await video.play(); } catch (err) { console.error(err); }
+    // 영상이 실제로 들어오는지 확인
+    setTimeout(() => {
+      if (stream && (!video.videoWidth || video.paused)) {
+        setStatus("영상이 표시되지 않으면 화면을 한 번 탭하세요");
+        $("camBox").addEventListener("click", () => video.play().catch(() => {}), { once: true });
+      }
+    }, 1500);
     $("stopCam").hidden = false;
     setStatus("인식 준비 중…(처음 한 번은 몇 초 걸려요)");
     await getWorker();
@@ -208,6 +219,7 @@
     stream = null;
     video.srcObject = null;
     $("camIdle").hidden = false;
+    $("camIdle").style.display = "";
     $("camStatus").hidden = true;
     $("stopCam").hidden = true;
     $("camBox").classList.remove("found");

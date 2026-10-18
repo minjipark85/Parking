@@ -59,11 +59,35 @@
   }
 
   // ---------- 조회 ----------
+  let resultAt = 0;
   function showResult(state, html) {
     const r = $("result");
     r.dataset.s = state;
     r.innerHTML = html;
     r.hidden = false;
+    // 카메라 테두리도 같은 신호 색으로
+    $("camBox").dataset.s = ["ok", "warn", "bad"].includes(state) ? state : "idle";
+    resultAt = Date.now();
+  }
+  function showIdle(text) {
+    showResult("idle", `<div class="verdict"><span class="dot"></span>대기 중</div><div class="sub">${text}</div>`);
+  }
+
+  // ---------- 화면 꺼짐 방지 · 전체 화면 ----------
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch (e) { /* 지원 안 함 */ }
+  }
+  function releaseAwake() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && stream) keepAwake(); });
+
+  const fsBtn = $("fsBtn");
+  if (document.fullscreenEnabled) {
+    fsBtn.hidden = false;
+    fsBtn.addEventListener("click", async () => {
+      try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch (e) {}
+    });
+    document.addEventListener("fullscreenchange", () => { fsBtn.querySelector("span").textContent = document.fullscreenElement ? "전체 화면 끄기" : "전체 화면"; });
   }
 
   async function check(silent) {
@@ -207,9 +231,11 @@
       }
     }, 1500);
     $("stopCam").hidden = false;
+    keepAwake();
     setStatus("인식 준비 중…(처음 한 번은 몇 초 걸려요)");
     await getWorker();
     setStatus("번호판을 네모 안에 맞춰 주세요");
+    showIdle("번호판을 네모 안에 맞추면 바로 예약 여부가 표시됩니다.");
     timer = setInterval(scanFrame, 700);
   }
 
@@ -223,6 +249,8 @@
     $("camStatus").hidden = true;
     $("stopCam").hidden = true;
     $("camBox").classList.remove("found");
+    $("camBox").dataset.s = "idle";
+    releaseAwake();
   }
 
   async function scanFrame() {
@@ -263,6 +291,11 @@
       } else if (!plate) {
         $("camBox").classList.remove("found");
         setStatus("번호판을 네모 안에 맞춰 주세요");
+        // 차량이 지나가고 15초 동안 번호판이 안 보이면 다음 차량을 위해 대기 상태로
+        if ($("result").dataset.s !== "idle" && Date.now() - resultAt > 15000 && document.activeElement !== $("plateInput")) {
+          lastShown = "";
+          showIdle("다음 차량의 번호판을 네모 안에 맞춰 주세요.");
+        }
       }
     } catch (err) {
       console.error(err);

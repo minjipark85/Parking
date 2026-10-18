@@ -4,72 +4,94 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>차량 예약 조회</title>
+  <meta name="theme-color" content="#0f131a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="예약 조회">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
-<div class="wrap">
-  <header>
+<div class="app">
+  <header class="top">
     <h1>차량 예약 조회</h1>
-    <div class="today" id="today"></div>
+    <div class="top-right">
+      <div class="today" id="today"></div>
+      <button type="button" class="icon-btn" id="fsBtn" hidden aria-label="전체 화면">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        <span>전체 화면</span>
+      </button>
+    </div>
   </header>
 
   <div class="notice" id="setupNotice" hidden></div>
 
-  <section class="panel" aria-labelledby="lookup-h">
-    <h2 id="lookup-h">번호판 확인</h2>
-    <div class="cam" id="camBox">
-      <video id="video" playsinline muted autoplay></video>
-      <div class="guide" aria-hidden="true"></div>
-      <div class="cam-idle" id="camIdle">
-        <button class="primary" id="startCam" type="button">카메라 켜기</button>
-        <p>번호판을 가운데 네모 안에 맞추면 자동으로 읽어 예약 여부를 보여줍니다.</p>
+  <main class="grid">
+    <!-- 왼쪽(세로 화면에선 위): 카메라 + 직접 입력 -->
+    <section class="col scan" aria-label="번호판 확인">
+      <div class="cam" id="camBox" data-s="idle">
+        <video id="video" playsinline muted autoplay></video>
+        <div class="guide" aria-hidden="true"></div>
+        <div class="cam-idle" id="camIdle">
+          <button class="primary big" id="startCam" type="button">카메라 켜기</button>
+          <p>번호판을 가운데 네모 안에 맞추면 자동으로 읽어 예약 여부를 보여줍니다.</p>
+        </div>
+        <div class="cam-status" id="camStatus" hidden>번호판을 찾는 중…</div>
+        <button type="button" class="cam-stop" id="stopCam" hidden>카메라 끄기</button>
       </div>
-      <div class="cam-status" id="camStatus" hidden>번호판을 찾는 중…</div>
-    </div>
-    <div class="result" id="result" hidden></div>
 
-    <div class="plate" style="margin-top:16px">
-      <div class="strip" aria-hidden="true">KOR</div>
-      <input id="plateInput" autocomplete="off" spellcheck="false" placeholder="12가 3456" aria-label="차량번호">
-    </div>
-    <div class="actions">
-      <button class="primary" id="checkBtn" type="button">예약 확인</button>
-      <button type="button" id="stopCam" hidden>카메라 끄기</button>
-      <label class="btn" id="camBtn">
-        <span id="camLabel">사진으로 인식</span>
-        <input id="camInput" type="file" accept="image/*">
-      </label>
-    </div>
-    <ul class="legend" aria-label="신호 안내">
-      <li><i class="lamp ok"></i>오늘 · 지금 예약 시간대</li>
-      <li><i class="lamp warn"></i>오늘 예약 · 다른 시간대</li>
-      <li><i class="lamp bad"></i>오늘 예약 아님</li>
-    </ul>
-    <p class="hint">인식이 틀리면 위 칸에서 번호를 고쳐 [예약 확인]을 누르세요.</p>
-  </section>
-
-  <section class="panel" aria-labelledby="list-h">
-    <h2 id="list-h">예약 현황</h2>
-    <div class="slots" aria-label="예약 시간대">
-      <span>예약 시간대</span><b>09:00~12:00</b><b>12:00~15:00</b><b>15:00~18:00</b>
-    </div>
-
-    <div class="ledger-head">
-      <div class="seg" role="group" aria-label="보기">
-        <button type="button" id="vUp" aria-pressed="true">오늘 이후</button>
-        <button type="button" id="vAll" aria-pressed="false">전체</button>
+      <div class="manual">
+        <div class="plate">
+          <div class="strip" aria-hidden="true">KOR</div>
+          <input id="plateInput" autocomplete="off" spellcheck="false" placeholder="12가 3456" aria-label="차량번호">
+        </div>
+        <button class="primary" id="checkBtn" type="button">예약 확인</button>
+        <label class="btn" id="camBtn">
+          <span id="camLabel">사진으로 인식</span>
+          <input id="camInput" type="file" accept="image/*">
+        </label>
       </div>
-      <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
-    </div>
-    <div id="ledger"><p class="empty">예약 목록을 불러오는 중…</p></div>
-  </section>
+    </section>
+
+    <!-- 오른쪽(세로 화면에선 아래): 신호 + 예약 현황 -->
+    <section class="col side" aria-label="확인 결과와 예약 현황">
+      <div class="result" id="result" data-s="idle" aria-live="polite">
+        <div class="verdict"><span class="dot"></span>대기 중</div>
+        <div class="sub">카메라를 켜거나 번호를 입력하면 여기에 예약 여부가 표시됩니다.</div>
+      </div>
+
+      <ul class="legend" aria-label="신호 안내">
+        <li><i class="lamp ok"></i>오늘 · 지금 시간대</li>
+        <li><i class="lamp warn"></i>오늘 · 다른 시간대</li>
+        <li><i class="lamp bad"></i>오늘 예약 아님</li>
+      </ul>
+
+      <div class="panel ledger-panel">
+        <div class="ledger-top">
+          <h2>예약 현황</h2>
+          <div class="slots" aria-label="예약 시간대"><b>09~12</b><b>12~15</b><b>15~18</b></div>
+        </div>
+        <div class="ledger-head">
+          <div class="seg" role="group" aria-label="보기">
+            <button type="button" id="vUp" aria-pressed="true">오늘 이후</button>
+            <button type="button" id="vAll" aria-pressed="false">전체</button>
+          </div>
+          <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
+        </div>
+        <div id="ledger" class="ledger"><p class="empty">예약 목록을 불러오는 중…</p></div>
+      </div>
+    </section>
+  </main>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="config.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="config.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

@@ -1,3 +1,6 @@
+/* hidden 속성이 붙은 요소는 항상 숨김 (카메라 안내 화면이 영상을 덮던 문제 수정) */
+[hidden] { display: none !important; }
+
 /* Layout: one column like a gate attendant's console — a license-plate lookup on top, the reservation ledger below. */
 :root {
   --bg: #eef1f5;

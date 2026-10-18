@@ -218,8 +218,18 @@
     busy = true;
     try {
       const vw = video.videoWidth, vh = video.videoHeight;
-      // 화면의 가이드 네모(가로 80%, 세로 30%, 가운데)와 같은 영역만 읽는다
-      const crop = { x: vw * 0.1, y: vh * 0.35, w: vw * 0.8, h: vh * 0.3 };
+      // 화면에 보이는 가이드 네모(가로 80%, 세로 30%, 가운데)와 정확히 같은 영역만 읽는다.
+      // 영상은 박스를 꽉 채우도록(cover) 잘려 보이므로, 화면 좌표를 영상 좌표로 바꿔 계산한다.
+      const box = $("camBox");
+      const bw = box.clientWidth, bh = box.clientHeight;
+      const scale = Math.max(bw / vw, bh / vh);
+      const ox = (vw * scale - bw) / 2, oy = (vh * scale - bh) / 2;
+      const crop = {
+        x: (bw * 0.1 + ox) / scale,
+        y: (bh * 0.35 + oy) / scale,
+        w: (bw * 0.8) / scale,
+        h: (bh * 0.3) / scale,
+      };
       const canvas = toOcrCanvas(video, vw, vh, crop);
       const w = await getWorker();
       const { data } = await w.recognize(canvas);

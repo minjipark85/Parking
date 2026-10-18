@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div class="app">
@@ -70,6 +70,7 @@
         <li><i class="lamp ok"></i>오늘 · 지금 시간대</li>
         <li><i class="lamp warn"></i>오늘 · 다른 시간대</li>
         <li><i class="lamp bad"></i>오늘 예약 아님</li>
+        <li><i class="lamp reg"></i>정기 차량</li>
       </ul>
 
       <div class="panel ledger-panel">
@@ -81,6 +82,7 @@
           <div class="seg" role="group" aria-label="보기">
             <button type="button" id="vToday" aria-pressed="true">오늘</button>
             <button type="button" id="vUp" aria-pressed="false">오늘 이후</button>
+            <button type="button" id="vReg" aria-pressed="false">정기 차량</button>
           </div>
           <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
         </div>
@@ -96,7 +98,7 @@
           </div>
           <p class="file-info" id="fileInfo"></p>
           <p class="file-msg" id="fileMsg" role="status"></p>
-          <p class="file-help">형식: 예약일자,예약시간,차량번호 — 예) 2026-10-20,09:00,12가3456 (엑셀에서 CSV로 저장한 파일도 됩니다)</p>
+          <p class="file-help">형식: 예약일자,예약시간,차량번호 — 예) 2026-10-20,09:00,12가3456 · 정기 차량은 첫 칸에 "정기" — 예) 정기,,11가1111,관리사무소 (엑셀에서 CSV로 저장한 파일도 됩니다)</p>
         </details>
       </div>
     </section>
@@ -107,6 +109,6 @@
 <script src="supabase.js"></script>
 <script src="tesseract.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

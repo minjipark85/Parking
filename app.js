@@ -55,8 +55,15 @@
   const STORE_KEY = "plate-reservation-store-v1";
   const store = loadStore();
   function loadStore() {
-    try { const v = JSON.parse(localStorage.getItem(STORE_KEY)); if (v && Array.isArray(v.db) && Array.isArray(v.file)) return v; } catch (e) {}
-    return { db: [], file: [], syncedAt: 0, fileName: "", fileAt: 0 };
+    try {
+      const v = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (v && Array.isArray(v.db) && Array.isArray(v.file)) {
+        if (!Array.isArray(v.regDb)) v.regDb = [];       // 예전 버전에서 저장한 데이터 호환
+        if (!Array.isArray(v.regFile)) v.regFile = [];
+        return v;
+      }
+    } catch (e) {}
+    return { db: [], file: [], regDb: [], regFile: [], syncedAt: 0, fileName: "", fileAt: 0 };
   }
   function saveStore() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
@@ -65,11 +72,20 @@
   // 행 형식: { d: "2026-10-19", t: "09:00", p: "12가3456", src: "db" | "file" }
   const allRows = () => store.db.concat(store.file);
 
+  // ---------- 정기 차량 ----------
+  // 행 형식: { p: "12가3456", memo: "관리사무소", from: "2026-01-01" | "", until: "2026-12-31" | "" }
+  // 정기 차량은 사전 예약과 상관없이 등록 기간(비어 있으면 무기한) 동안 항상 출입 가능
+  const allRegs = () => store.regDb.concat(store.regFile);
+  const regActive = (r, day) => (!r.from || r.from <= day) && (!r.until || r.until >= day);
+  const regMatch = (r, q) => r.p === q || (q.length >= 7 && r.p.endsWith(q));
+  const activeRegs = () => { const t = todayStr(); return allRegs().filter((r) => regActive(r, t)); };
+
   // ---------- DB 연결 (Supabase, 선택) ----------
   const cfg = window.APP_CONFIG || {};
   const configured = cfg.SUPABASE_URL && !cfg.SUPABASE_URL.includes("YOUR-PROJECT") && cfg.SUPABASE_ANON_KEY && !cfg.SUPABASE_ANON_KEY.includes("YOUR-ANON-KEY");
   const sb = configured && window.supabase ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
   const TABLE = "reservations";
+  const REG_TABLE = "regular_vehicles";
 
   let syncing = false, lastSyncError = false, lastQuery = "";
   async function sync() {
@@ -89,7 +105,12 @@
         data.forEach((r) => rows.push({ d: r.reserve_date, t: hhmm(r.reserve_time), p: norm(r.plate_key), src: "db" }));
         if (data.length < 1000) break;
       }
-      store.db = rows; store.syncedAt = Date.now(); lastSyncError = false;
+      store.db = rows;
+      // 정기 차량 목록 (표가 아직 없으면 건너뜀)
+      const reg = await sb.from(REG_TABLE).select("plate_key,memo,valid_from,valid_until").limit(5000);
+      if (reg.error) console.warn("정기 차량 표를 읽지 못했어요:", reg.error.message);
+      else store.regDb = reg.data.map((r) => ({ p: norm(r.plate_key), memo: r.memo || "", from: r.valid_from || "", until: r.valid_until || "", src: "db" }));
+      store.syncedAt = Date.now(); lastSyncError = false;
       saveStore();
       renderLedger();
       if (lastQuery) check(true);
@@ -103,16 +124,18 @@
   // ---------- 상단 연결 상태 표시 ----------
   function setNet(text, state) { const n = $("netStatus"); n.dataset.s = state; n.querySelector("span").textContent = text; }
   function renderNet() {
-    const count = allRows().filter((r) => r.d >= todayStr()).length;
+    const regN = activeRegs().length;
+    const count = allRows().filter((r) => r.d >= todayStr()).length + "건" + (regN ? ` · 정기 ${regN}대` : "");
     if (!sb) {
-      setNet(store.file.length ? `기기 저장 예약 ${count}건 (파일)` : "예약 파일을 불러오세요", store.file.length ? "ok" : "warn");
+      const has = store.file.length || store.regFile.length;
+      setNet(has ? `기기 저장 예약 ${count} (파일)` : "예약 파일을 불러오세요", has ? "ok" : "warn");
       return;
     }
     if (syncing) { setNet("예약 받는 중…", "info"); return; }
     const when = store.syncedAt ? fmtStamp(store.syncedAt) : "없음";
-    if (!navigator.onLine) setNet(`오프라인 · 마지막 동기화 ${when} · ${count}건`, "warn");
-    else if (lastSyncError) setNet(`동기화 실패 · 마지막 ${when} · ${count}건`, "warn");
-    else setNet(`온라인 · ${when} 동기화 · ${count}건`, "ok");
+    if (!navigator.onLine) setNet(`오프라인 · 마지막 동기화 ${when} · ${count}`, "warn");
+    else if (lastSyncError) setNet(`동기화 실패 · 마지막 ${when} · ${count}`, "warn");
+    else setNet(`온라인 · ${when} 동기화 · ${count}`, "ok");
   }
   window.addEventListener("online", () => { renderNet(); sync(); });
   window.addEventListener("offline", renderNet);
@@ -134,7 +157,7 @@
     r.dataset.s = state;
     r.innerHTML = html;
     r.hidden = false;
-    $("camBox").dataset.s = ["ok", "warn", "bad"].includes(state) ? state : "idle";
+    $("camBox").dataset.s = ["ok", "warn", "bad", "reg"].includes(state) ? state : "idle";
     resultAt = Date.now();
   }
   function showIdle(text) {
@@ -153,8 +176,21 @@
     }
     lastQuery = q;
     const rows = allRows();
-    if (!rows.length) {
-      showResult("info", `<div class="verdict"><span class="dot"></span>저장된 예약이 없어요</div><div class="sub">${sb ? "인터넷에 연결해 예약을 한 번 받아 오세요." : "[예약 파일 불러오기]로 예약 파일을 넣어 주세요."}</div>`);
+    const today0 = todayStr();
+
+    // 🔵 정기 차량: 예약과 상관없이 출입 가능 (가장 먼저 확인)
+    const reg = allRegs().find((r) => regMatch(r, q) && regActive(r, today0));
+    if (reg) {
+      const label0 = `<span class="mini-plate">${esc(pretty(reg.p))}</span>`;
+      const info = [reg.memo ? esc(reg.memo) : "", reg.until ? `${fmtDate(reg.until)}까지` : "기간 제한 없음"].filter(Boolean).join(" · ");
+      showResult("reg", `<div class="verdict"><span class="dot"></span>정기 차량 · 출입 가능</div><div>${label0}</div>` +
+        `<div class="sub">${info}</div><div class="sub">현재 시각 ${nowHHMM()}</div>`);
+      return;
+    }
+    const expiredReg = allRegs().find((r) => regMatch(r, q) && !regActive(r, today0));
+
+    if (!rows.length && !allRegs().length) {
+      showResult("info", `<div class="verdict"><span class="dot"></span>저장된 예약·정기 차량이 없어요</div><div class="sub">${sb ? "인터넷에 연결해 예약을 한 번 받아 오세요." : "[예약 파일 불러오기]로 예약 파일을 넣어 주세요."}</div>`);
       return;
     }
 
@@ -192,15 +228,17 @@
       const l4 = last4(q);
       // 오늘 예약 중 한 글자만 다르거나 뒷번호 4자리가 같은 번호 → "혹시 이 차량?" 버튼
       const seen = new Set();
-      const near = rows.filter((r) => r.d === today && r.p !== q && ((l4 && last4(r.p) === l4) || editDistance(r.p, q) <= 1))
+      const pool = activeRegs().map((r) => ({ p: r.p, reg: true })).concat(rows.filter((r) => r.d === today));
+      const near = pool.filter((r) => r.p !== q && ((l4 && last4(r.p) === l4) || editDistance(r.p, q) <= 1))
         .filter((r) => !seen.has(r.p) && seen.add(r.p)).slice(0, 4);
       if (near.length) {
         detail += `<div class="sub">인식이 틀렸을 수 있어요. 혹시 이 차량인가요?</div><div class="suggest">` +
-          near.map((r) => `<button type="button" class="suggest-btn" data-plate="${esc(r.p)}"><span class="mini-plate">${esc(pretty(r.p))}</span><span>${esc(slotLabel(r.t))}</span></button>`).join("") +
+          near.map((r) => `<button type="button" class="suggest-btn" data-plate="${esc(r.p)}"><span class="mini-plate">${esc(pretty(r.p))}</span><span>${r.reg ? "정기 차량" : esc(slotLabel(r.t))}</span></button>`).join("") +
           `</div>`;
       }
       if (!PLATE_RE.test(q)) detail += `<div class="sub">번호 형식이 일반적이지 않아요. 다시 확인해 주세요.</div>`;
     }
+    if (expiredReg) detail += `<div class="sub">정기 차량이지만 등록 기간이 아니에요 (${[expiredReg.from && fmtDate(expiredReg.from) + "부터", expiredReg.until && fmtDate(expiredReg.until) + "까지"].filter(Boolean).join(" ")})</div>`;
     if (sb && !navigator.onLine) detail += `<div class="sub">※ 오프라인: ${store.syncedAt ? fmtStamp(store.syncedAt) : "-"}에 받은 예약 기준</div>`;
     showResult("bad", `<div class="verdict"><span class="dot"></span>오늘 예약이 아닙니다</div><div>${label}</div>${detail}`);
   }
@@ -461,7 +499,7 @@
     if (!found.length) return null;
     const cands = [];
     found.forEach((c) => { cands.push(c); const m = c.match(/^\d(\d{2}[가-힣]\d{4})$/); if (m) cands.push(m[1]); });
-    const known = new Set(allRows().map((r) => r.p));
+    const known = new Set(allRows().map((r) => r.p).concat(allRegs().map((r) => r.p)));
     return cands.find((c) => known.has(c)) || found[0];
   }
 
@@ -668,18 +706,26 @@
     const slot = slotOf(`${pad(+m[1])}:${m[2] || "00"}`);
     return slot ? slot.s : null;          // 시간대 시작 시각으로 맞춤
   }
+  // 정기 차량 줄: 첫 칸에 "정기"  예) 정기,,12가3456,관리사무소   (기간: 정기,2026-12-31,12가3456,관리사무소 → 그날까지)
   function parseCsv(text) {
-    const rows = [], bad = [];
+    const rows = [], regs = [], bad = [];
     text.replace(/^﻿/, "").split(/\r?\n/).forEach((line, i) => {
       if (!line.trim()) return;
       const cols = line.split(/[,\t;]/).map((c) => c.replace(/^"|"$/g, "").trim());
+      if (/^정기/.test(cols[0])) {
+        const pi = cols.findIndex((c, k) => k > 0 && PLATE_RE.test(norm(c)));
+        if (pi < 0) { bad.push(i + 1); return; }
+        const until = cols[1] && pi !== 1 ? parseDate(cols[1]) || "" : "";
+        regs.push({ p: norm(cols[pi]), memo: cols.slice(pi + 1).filter(Boolean).join(" "), from: "", until, src: "file" });
+        return;
+      }
       const d = cols.length >= 3 ? parseDate(cols[0]) : null;
       const t = cols.length >= 3 ? parseTime(cols[1]) : null;
       const p = cols.length >= 3 ? norm(cols[2]) : "";
       if (!d || !t || !PLATE_RE.test(p)) { if (i > 0) bad.push(i + 1); return; }   // 첫 줄(제목)은 조용히 건너뜀
       rows.push({ d, t, p, src: "file" });
     });
-    return { rows, bad };
+    return { rows, regs, bad };
   }
 
   $("csvInput").addEventListener("change", async (e) => {
@@ -688,12 +734,12 @@
     if (!file) return;
     const msg = $("fileMsg");
     try {
-      const { rows, bad } = parseCsv(decodeText(await file.arrayBuffer()));
-      if (!rows.length) { msg.className = "file-msg err"; msg.textContent = "읽을 수 있는 예약이 없어요. 예약일자,예약시간,차량번호 순서인지 확인하세요."; return; }
-      store.file = rows; store.fileName = file.name; store.fileAt = Date.now();
+      const { rows, regs, bad } = parseCsv(decodeText(await file.arrayBuffer()));
+      if (!rows.length && !regs.length) { msg.className = "file-msg err"; msg.textContent = "읽을 수 있는 예약이 없어요. 예약일자,예약시간,차량번호 순서인지 확인하세요."; return; }
+      store.file = rows; store.regFile = regs; store.fileName = file.name; store.fileAt = Date.now();
       saveStore();
       msg.className = "file-msg ok";
-      msg.textContent = `${file.name}에서 예약 ${rows.length}건을 저장했어요.` + (bad.length ? ` (읽지 못한 줄: ${bad.slice(0, 8).join(", ")}${bad.length > 8 ? " 외" : ""})` : "");
+      msg.textContent = `${file.name}에서 예약 ${rows.length}건${regs.length ? `, 정기 차량 ${regs.length}대를` : "을"} 저장했어요.` + (bad.length ? ` (읽지 못한 줄: ${bad.slice(0, 8).join(", ")}${bad.length > 8 ? " 외" : ""})` : "");
       renderFileInfo(); renderLedger(); renderNet();
       if (lastQuery) check(true);
     } catch (err) {
@@ -709,16 +755,18 @@
       setTimeout(() => { b.classList.remove("arm"); b.textContent = "파일 예약 지우기"; }, 4000);
       return;
     }
-    store.file = []; store.fileName = ""; store.fileAt = 0; saveStore();
+    store.file = []; store.regFile = []; store.fileName = ""; store.fileAt = 0; saveStore();
     b.classList.remove("arm"); b.textContent = "파일 예약 지우기";
     $("fileMsg").className = "file-msg"; $("fileMsg").textContent = "파일에서 불러온 예약을 지웠어요.";
     renderFileInfo(); renderLedger(); renderNet();
   });
 
   function renderFileInfo() {
-    $("fileCount").textContent = store.file.length ? `· ${store.file.length}건` : "";
-    $("clearFile").hidden = !store.file.length;
-    $("fileInfo").textContent = store.file.length ? `불러온 파일: ${store.fileName} · ${store.file.length}건 · ${fmtStamp(store.fileAt)}` : "";
+    const has = store.file.length || store.regFile.length;
+    const summary = `${store.file.length}건${store.regFile.length ? ` · 정기 ${store.regFile.length}대` : ""}`;
+    $("fileCount").textContent = has ? `· ${summary}` : "";
+    $("clearFile").hidden = !has;
+    $("fileInfo").textContent = has ? `불러온 파일: ${store.fileName} · ${summary} · ${fmtStamp(store.fileAt)}` : "";
   }
 
   // ---------- 예약 현황 (보기 전용) ----------
@@ -729,6 +777,21 @@
     const box = $("ledger");
     const today = todayStr();
     const f = norm($("filter").value);
+    if (view === "reg") {
+      let regs = allRegs().slice().sort((a, b) => a.p.localeCompare(b.p));
+      if (f) regs = regs.filter((r) => r.p.includes(f));
+      if (!regs.length) {
+        box.innerHTML = `<p class="empty">${allRegs().length ? "조건에 맞는 정기 차량이 없어요." : (sb ? "등록된 정기 차량이 없어요. Supabase의 regular_vehicles 표에 넣으면 여기에 보입니다." : "정기 차량이 없어요. 예약 파일에 '정기' 줄을 넣어 불러오세요.")}</p>`;
+        return;
+      }
+      box.innerHTML = `<div class="day"><div class="day-label">정기 차량<span>· ${regs.length}대</span></div>` + regs.map((r) => {
+        const on = regActive(r, today);
+        const period = r.until ? `~${r.until.slice(2).replace(/-/g, ".")}` : "무기한";
+        return `<div class="row"><span class="t reg-memo">${esc(r.memo || "정기")}</span><span><span class="mini-plate">${esc(pretty(r.p))}</span></span>` +
+          `<span class="chip ${on ? "reg" : "after"}">${on ? period : "기간 아님"}</span></div>`;
+      }).join("") + `</div>`;
+      return;
+    }
     let list = allRows().filter((r) => (view === "today" ? r.d === today : r.d >= today));
     if (f) list = list.filter((r) => r.p.includes(f));
     list.sort((a, b) => (a.d + a.t + a.p).localeCompare(b.d + b.t + b.p));
@@ -758,10 +821,12 @@
     view = v;
     $("vToday").setAttribute("aria-pressed", String(v === "today"));
     $("vUp").setAttribute("aria-pressed", String(v === "up"));
+    $("vReg").setAttribute("aria-pressed", String(v === "reg"));
     renderLedger();
   };
   $("vToday").addEventListener("click", () => setView("today"));
   $("vUp").addEventListener("click", () => setView("up"));
+  $("vReg").addEventListener("click", () => setView("reg"));
   $("filter").addEventListener("input", renderLedger);
 
   // ---------- 시작 ----------

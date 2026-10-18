@@ -19,6 +19,7 @@
   --warn: #9a5b00; --warn-soft: #fbefd9;
   --bad: #b3261e; --bad-soft: #fbe3e1;
   --idle: #8a94a3; --idle-soft: #e7ebf0;
+  --reg: #1f5fd6; --reg-soft: #e1ebff;
   --cam-bg: #0b0e13; --cam-ink: #c9d2de;
   --display: "Black Han Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
@@ -34,6 +35,7 @@
     --accent: #6f9cff; --accent-ink: #0b1220; --accent-soft: #1c2a47;
     --ok: #5fd39a; --ok-soft: #133224; --warn: #f0b860; --warn-soft: #3a2a10; --bad: #ff8a80; --bad-soft: #3d1a18;
     --idle: #7d8899; --idle-soft: #1d2430;
+    --reg: #6fa2ff; --reg-soft: #172a4d;
     color-scheme: dark;
   }
 }
@@ -95,6 +97,7 @@ button:focus-visible, .btn:focus-within, input:focus-visible { outline: 3px soli
 .cam[data-s="ok"] { border-color: var(--ok); }
 .cam[data-s="warn"] { border-color: var(--warn); }
 .cam[data-s="bad"] { border-color: var(--bad); }
+.cam[data-s="reg"] { border-color: var(--reg); }
 .cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 0; }
 /* 가이드 네모: app.js의 인식 영역(가로 10%~90%, 세로 35%~65%)과 반드시 같게 유지 */
 .cam .guide { position: absolute; left: 10%; top: 35%; width: 80%; height: 30%; border: 3px solid #ffffff; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .35); pointer-events: none; z-index: 1; }
@@ -127,10 +130,11 @@ button:focus-visible, .btn:focus-within, input:focus-visible { outline: 3px soli
 .result[data-s="ok"] { --c: var(--ok); --soft: var(--ok-soft); }
 .result[data-s="warn"] { --c: var(--warn); --soft: var(--warn-soft); }
 .result[data-s="bad"] { --c: var(--bad); --soft: var(--bad-soft); }
-.result[data-s="info"] { --c: var(--accent); --soft: var(--accent-soft); }
+.result[data-s="info"] { --c: var(--idle); --soft: var(--idle-soft); }
+.result[data-s="reg"] { --c: var(--reg); --soft: var(--reg-soft); }
 .verdict { display: flex; align-items: center; gap: clamp(10px, 1.6vmin, 16px); font-family: var(--display); font-size: clamp(24px, 3.6vmin + 10px, 46px); line-height: 1.15; color: var(--c); text-wrap: balance; }
 .dot { width: clamp(22px, 3vmin + 8px, 40px); height: clamp(22px, 3vmin + 8px, 40px); border-radius: 50%; background: var(--c); flex: none; box-shadow: 0 0 0 6px color-mix(in srgb, var(--c) 22%, transparent); }
-.result[data-s="ok"] .dot, .result[data-s="bad"] .dot, .result[data-s="warn"] .dot { animation: pulse 1.6s ease-out 2; }
+.result[data-s="ok"] .dot, .result[data-s="bad"] .dot, .result[data-s="warn"] .dot, .result[data-s="reg"] .dot { animation: pulse 1.6s ease-out 2; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
 .result .mini-plate { font-size: clamp(20px, 2.4vmin + 10px, 32px); }
 .result ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
@@ -263,3 +267,9 @@ button.small, .btn.small { min-height: 44px; font-size: 14px; padding: 0 14px; }
 .suggest { display: flex; flex-wrap: wrap; gap: 8px; }
 .suggest-btn { min-height: 48px; padding: 0 12px; gap: 10px; font-size: 15px; background: var(--surface); }
 .suggest-btn .mini-plate { font-size: 18px; }
+
+/* 정기 차량 */
+.lamp.reg { background: var(--reg); }
+.chip.reg { color: var(--reg); background: var(--reg-soft); }
+.reg-memo { font-family: var(--body); font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seg button { padding: 0 12px; }

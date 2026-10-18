@@ -180,7 +180,7 @@ button:focus-visible, .btn:focus-within, input:focus-visible { outline: 3px soli
 @media (min-width: 900px), (orientation: landscape) and (min-width: 600px) {
   html, body { height: 100%; }
   body { overflow: hidden; }
-  .app { height: 100dvh; }
+  .app { height: 100vh; height: 100dvh; }
   .grid { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); }
   .col { display: flex; }
   .scan { min-height: 0; }
@@ -194,7 +194,7 @@ button:focus-visible, .btn:focus-within, input:focus-visible { outline: 3px soli
 @media (min-width: 700px) and (orientation: portrait) {
   html, body { height: 100%; }
   body { overflow: hidden; }
-  .app { height: 100dvh; }
+  .app { height: 100vh; height: 100dvh; }
   .grid { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr); }
   .scan { display: flex; min-height: 0; }
   .cam { flex: 1; aspect-ratio: auto; min-height: 0; }
@@ -253,3 +253,8 @@ button.small, .btn.small { min-height: 44px; font-size: 14px; padding: 0 14px; }
 .file-box[open] summary { margin-bottom: 4px; }
 .file-box summary span { font-weight: 500; }
 .file-help { margin: 0; font-size: 12px; color: var(--muted); }
+
+/* 예전 Safari(iPadOS 14 이하) 대비: aspect-ratio를 모르면 카메라 칸 높이를 직접 지정 */
+@supports not (aspect-ratio: 1 / 1) {
+  .cam { height: 75vw; max-height: 70vh; }
+}

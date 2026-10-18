@@ -251,7 +251,7 @@
   }
 
   let workerP = null;
-  const getWorker = () => (workerP ||= (async () => {
+  const getWorker = () => workerP || (workerP = (async () => {
     const w = await Tesseract.createWorker("kor", 1, {
       workerPath: abs("worker.min.js"),
       corePath: abs("./"),

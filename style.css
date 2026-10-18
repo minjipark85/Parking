@@ -258,3 +258,8 @@ button.small, .btn.small { min-height: 44px; font-size: 14px; padding: 0 14px; }
 @supports not (aspect-ratio: 1 / 1) {
   .cam { height: 75vw; max-height: 70vh; }
 }
+
+/* "혹시 이 차량인가요?" 버튼 */
+.suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+.suggest-btn { min-height: 48px; padding: 0 12px; gap: 10px; font-size: 15px; background: var(--surface); }
+.suggest-btn .mini-plate { font-size: 18px; }

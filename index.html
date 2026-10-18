@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>차량 예약 조회</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>차량 예약 조회</h1>
+    <div class="today" id="today"></div>
+  </header>
+
+  <div class="notice" id="setupNotice" hidden></div>
+
+  <section class="panel" aria-labelledby="lookup-h">
+    <h2 id="lookup-h">번호판 확인</h2>
+    <div class="cam" id="camBox">
+      <video id="video" playsinline muted></video>
+      <div class="guide" aria-hidden="true"></div>
+      <div class="cam-idle" id="camIdle">
+        <button class="primary" id="startCam" type="button">카메라 켜기</button>
+        <p>번호판을 가운데 네모 안에 맞추면 자동으로 읽어 예약 여부를 보여줍니다.</p>
+      </div>
+      <div class="cam-status" id="camStatus" hidden>번호판을 찾는 중…</div>
+    </div>
+    <div class="result" id="result" hidden></div>
+
+    <div class="plate" style="margin-top:16px">
+      <div class="strip" aria-hidden="true">KOR</div>
+      <input id="plateInput" autocomplete="off" spellcheck="false" placeholder="12가 3456" aria-label="차량번호">
+    </div>
+    <div class="actions">
+      <button class="primary" id="checkBtn" type="button">예약 확인</button>
+      <button type="button" id="stopCam" hidden>카메라 끄기</button>
+      <label class="btn" id="camBtn">
+        <span id="camLabel">사진으로 인식</span>
+        <input id="camInput" type="file" accept="image/*">
+      </label>
+    </div>
+    <ul class="legend" aria-label="신호 안내">
+      <li><i class="lamp ok"></i>오늘 · 지금 예약 시간대</li>
+      <li><i class="lamp warn"></i>오늘 예약 · 다른 시간대</li>
+      <li><i class="lamp bad"></i>오늘 예약 아님</li>
+    </ul>
+    <p class="hint">인식이 틀리면 위 칸에서 번호를 고쳐 [예약 확인]을 누르세요.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="list-h">
+    <h2 id="list-h">예약 현황</h2>
+    <div class="slots" aria-label="예약 시간대">
+      <span>예약 시간대</span><b>09:00~12:00</b><b>12:00~15:00</b><b>15:00~18:00</b>
+    </div>
+
+    <div class="ledger-head">
+      <div class="seg" role="group" aria-label="보기">
+        <button type="button" id="vUp" aria-pressed="true">오늘 이후</button>
+        <button type="button" id="vAll" aria-pressed="false">전체</button>
+      </div>
+      <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
+    </div>
+    <div id="ledger"><p class="empty">예약 목록을 불러오는 중…</p></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

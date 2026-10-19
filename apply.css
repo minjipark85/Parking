@@ -1,0 +1,141 @@
+/* =========================================================
+   방문 차량 예약 — 신청 페이지 (모바일 우선, 확인 앱과 같은 색·글꼴)
+   ========================================================= */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --ink: #141a24; --muted: #5d6878; --line: #d5dbe4;
+  --plate: #ffffff; --plate-ink: #0d1117; --plate-edge: #1b2230;
+  --accent: #1d4fb0; --accent-ink: #ffffff; --accent-soft: #e2eafa;
+  --ok: #157a46; --ok-soft: #dff3e8; --warn: #9a5b00; --warn-soft: #fbefd9; --bad: #b3261e; --bad-soft: #fbe3e1;
+  --display: "Black Han Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f131a; --surface: #171d27; --ink: #e7ecf3; --muted: #97a2b3; --line: #2a3342;
+    --plate: #f2f4f7; --plate-ink: #0d1117; --plate-edge: #000000;
+    --accent: #6f9cff; --accent-ink: #0b1220; --accent-soft: #1c2a47;
+    --ok: #5fd39a; --ok-soft: #133224; --warn: #f0b860; --warn-soft: #3a2a10; --bad: #ff8a80; --bad-soft: #3d1a18;
+    color-scheme: dark;
+  }
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; -webkit-tap-highlight-color: transparent; }
+button, input { font: inherit; color: inherit; }
+
+.page {
+  max-width: 600px; margin: 0 auto; display: grid; gap: 16px;
+  padding-top: max(14px, env(safe-area-inset-top)); padding-bottom: max(28px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+}
+
+/* ---------- 머리글 ---------- */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 22px; }
+.brand-mark { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 20px; }
+.tabs { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
+.tabs button { border: 0; background: transparent; padding: 0 14px; min-height: 40px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.notice { font-size: 14px; background: var(--warn-soft); border: 1px solid var(--warn); border-radius: 10px; padding: 12px 14px; }
+
+/* ---------- 단계 카드 ---------- */
+form#applyForm { display: grid; gap: 14px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px; display: grid; gap: 12px; }
+.step h2 { margin: 0; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.num { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 700; flex: none; }
+.muted { color: var(--muted); margin: 0; font-size: 14px; }
+
+/* 날짜 띠: 가로로 밀어서 고르기 */
+.dates { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; margin: 0 -2px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.date-chip { flex: none; scroll-snap-align: start; width: 64px; min-height: 72px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; align-content: center; gap: 2px; cursor: pointer; padding: 6px 0; }
+.date-chip .dw { font-size: 12px; color: var(--muted); }
+.date-chip .dd { font-family: var(--mono); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.date-chip .dl { font-size: 11px; color: var(--muted); }
+.date-chip.sun .dw { color: var(--bad); } .date-chip.sat .dw { color: var(--accent); }
+.date-chip[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.date-chip[aria-checked="true"] .dw, .date-chip[aria-checked="true"] .dl { color: var(--accent-ink); }
+.other-date { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+.other-date input { min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); }
+
+/* 시간대 카드 */
+.slots { display: grid; gap: 8px; }
+.slot { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; text-align: left; min-height: 64px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.slot .time { font-family: var(--mono); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.slot .left { font-size: 14px; font-weight: 600; color: var(--ok); white-space: nowrap; }
+.slot .bar { grid-column: 1 / -1; height: 5px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.slot .bar i { display: block; height: 100%; background: var(--ok); border-radius: 99px; }
+.slot.few .left { color: var(--warn); } .slot.few .bar i { background: var(--warn); }
+.slot[aria-checked="true"] { border: 2px solid var(--accent); background: var(--accent-soft); padding: 9px 13px; }
+.slot:disabled { cursor: not-allowed; opacity: .55; }
+.slot:disabled .left { color: var(--muted); }
+
+/* 입력 */
+.field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); min-width: 0; }
+.field > input { min-height: 50px; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; background: var(--bg); font-size: 17px; font-weight: 500; color: var(--ink); min-width: 0; width: 100%; }
+.field .hint { font-weight: 400; font-size: 13px; }
+.field .hint.err { color: var(--bad); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 420px) { .two { grid-template-columns: 1fr; } }
+.plate { display: flex; align-items: stretch; background: var(--plate); border: 3px solid var(--plate-edge); border-radius: 10px; overflow: hidden; }
+.plate .strip { width: 28px; flex: none; background: #1d4fb0; color: #ffffff; display: grid; place-items: center; font: 600 10px/1.1 var(--body); writing-mode: vertical-rl; }
+.plate input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--plate-ink); font-family: var(--display); font-size: 30px; letter-spacing: .05em; text-align: center; padding: 6px; }
+.plate input::placeholder { color: #b5bcc7; }
+.plate:focus-within, .field > input:focus, .other-date input:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.agree { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; min-height: 44px; }
+.agree input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.terms summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.terms table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+.terms th { text-align: left; width: 84px; color: var(--muted); font-weight: 600; padding: 6px 8px 6px 0; vertical-align: top; }
+.terms td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.terms p { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+
+/* 신청 버튼 영역: 휴대폰에서는 화면 아래에 붙어 있음 */
+.submit-bar { position: sticky; bottom: 0; z-index: 5; background: var(--bg); padding: 10px 0 max(6px, env(safe-area-inset-bottom)); display: grid; gap: 6px; border-top: 1px solid var(--line); }
+.summary { margin: 0; font-size: 14px; color: var(--muted); }
+.summary b { color: var(--ink); }
+.form-error { margin: 0; font-size: 14px; color: var(--bad); font-weight: 600; }
+.form-error:empty { display: none; }
+
+button.primary, button { min-height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 17px; cursor: pointer; padding: 0 18px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible, .date-chip:focus-visible, .slot:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wide { grid-column: 1 / -1; }
+
+/* 완료 티켓 */
+.ticket { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.ticket-head { background: var(--ok-soft); padding: 22px 18px; display: flex; align-items: center; gap: 14px; border-bottom: 2px dashed var(--line); }
+.ticket-head h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--ok); }
+.check { width: 40px; height: 40px; border-radius: 50%; background: var(--ok); color: var(--ok-soft); display: grid; place-items: center; font-size: 22px; font-weight: 700; flex: none; }
+.ticket-body { margin: 0; padding: 18px; display: grid; gap: 12px; }
+.ticket-body div { display: grid; grid-template-columns: 90px 1fr; align-items: center; }
+.ticket-body dt { color: var(--muted); font-size: 14px; }
+.ticket-body dd { margin: 0; font-size: 18px; font-weight: 600; }
+.mono { font-family: var(--mono); letter-spacing: .08em; }
+.ticket-foot { margin: 0; padding: 0 18px 18px; font-size: 14px; color: var(--muted); }
+.mini-plate { display: inline-block; font-family: var(--display); font-weight: 400; font-size: 20px; letter-spacing: .05em; color: var(--plate-ink); background: var(--plate); border: 2px solid var(--plate-edge); border-radius: 6px; padding: 1px 10px; }
+.row-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* 내 예약 */
+#mineForm { align-items: end; }
+.my-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.my-item .when { font-weight: 700; }
+.my-item .meta { font-size: 13px; color: var(--muted); }
+.my-item button { min-height: 44px; font-size: 14px; padding: 0 14px; grid-row: 1 / span 2; grid-column: 2; }
+.my-item button.arm { color: var(--bad); border-color: var(--bad); }
+.my-item.gone { opacity: .5; }
+
+.foot { display: grid; gap: 2px; font-size: 13px; color: var(--muted); text-align: center; padding-top: 6px; }
+
+@media (min-width: 640px) {
+  .step { padding: 22px 22px; }
+  .slots { grid-template-columns: repeat(3, 1fr); }
+  .slot { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .slot .time { font-size: 16px; }
+  .slot .bar { width: 100%; }
+  .submit-bar { position: static; border-top: 0; background: transparent; }
+}

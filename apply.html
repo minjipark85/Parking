@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>방문 차량 예약</title>
+  <meta name="theme-color" content="#1d4fb0">
+  <meta name="description" content="날짜와 시간대를 고르고 차량번호를 입력하면 출입 예약이 바로 확정됩니다.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="apply.css?v=1">
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>방문 차량 예약</span>
+    </div>
+    <nav class="tabs" aria-label="메뉴">
+      <button type="button" id="tabApply" aria-pressed="true">예약 신청</button>
+      <button type="button" id="tabMine" aria-pressed="false">내 예약 확인</button>
+    </nav>
+  </header>
+
+  <div class="notice" id="setupNotice" hidden></div>
+
+  <!-- 예약 신청 -->
+  <main id="applyView">
+    <form id="applyForm" novalidate>
+      <section class="step" aria-labelledby="s1">
+        <h2 id="s1"><span class="num">1</span>방문 날짜</h2>
+        <div class="dates" id="dateStrip" role="radiogroup" aria-label="방문 날짜"></div>
+        <label class="other-date">다른 날짜 고르기 <input type="date" id="fDate"></label>
+      </section>
+
+      <section class="step" aria-labelledby="s2">
+        <h2 id="s2"><span class="num">2</span>시간대</h2>
+        <div class="slots" id="slotList" role="radiogroup" aria-label="시간대">
+          <p class="muted">날짜를 고르면 남은 자리가 보여요.</p>
+        </div>
+      </section>
+
+      <section class="step" aria-labelledby="s3">
+        <h2 id="s3"><span class="num">3</span>차량과 신청자</h2>
+        <label class="field">차량번호
+          <div class="plate">
+            <span class="strip" aria-hidden="true">KOR</span>
+            <input id="fPlate" autocomplete="off" spellcheck="false" placeholder="12가 3456" required>
+          </div>
+          <span class="hint" id="plateHint">예: 12가3456, 123가4567, 서울12가3456</span>
+        </label>
+        <div class="two">
+          <label class="field">이름
+            <input id="fName" autocomplete="name" maxlength="30" placeholder="홍길동" required>
+          </label>
+          <label class="field">연락처
+            <input id="fPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-1234-5678" maxlength="13" required>
+          </label>
+        </div>
+      </section>
+
+      <section class="step" aria-labelledby="s4">
+        <h2 id="s4"><span class="num">4</span>개인정보 수집·이용 동의</h2>
+        <label class="agree">
+          <input type="checkbox" id="fAgree">
+          <span>아래 내용에 동의합니다 (필수)</span>
+        </label>
+        <details class="terms">
+          <summary>내용 보기</summary>
+          <table>
+            <tr><th>수집 항목</th><td>이름, 연락처, 차량번호, 방문 날짜·시간대</td></tr>
+            <tr><th>이용 목적</th><td>방문 차량 출입 확인, 예약 관련 연락</td></tr>
+            <tr><th>보관 기간</th><td>이름·연락처는 방문일로부터 30일 후 삭제</td></tr>
+          </table>
+          <p>동의하지 않으실 수 있으며, 이 경우 예약 신청을 할 수 없습니다.</p>
+        </details>
+      </section>
+
+      <div class="submit-bar">
+        <p class="summary" id="summary">날짜와 시간대를 골라 주세요.</p>
+        <p class="form-error" id="formError" role="alert"></p>
+        <button type="submit" class="primary" id="submitBtn">예약 신청</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- 신청 완료 -->
+  <main id="doneView" hidden>
+    <section class="ticket" aria-labelledby="doneTitle">
+      <div class="ticket-head">
+        <span class="check" aria-hidden="true">✓</span>
+        <h2 id="doneTitle">예약이 확정됐어요</h2>
+      </div>
+      <dl class="ticket-body">
+        <div><dt>예약번호</dt><dd class="mono" id="dCode"></dd></div>
+        <div><dt>방문 날짜</dt><dd id="dDate"></dd></div>
+        <div><dt>시간대</dt><dd id="dSlot"></dd></div>
+        <div><dt>차량번호</dt><dd><span class="mini-plate" id="dPlate"></span></dd></div>
+      </dl>
+      <p class="ticket-foot">예약한 시간대에 오시면 번호판 확인 후 바로 들어오실 수 있어요. 이 화면을 캡처해 두면 편해요.</p>
+    </section>
+    <div class="row-buttons">
+      <button type="button" class="primary" id="againBtn">다른 예약 신청</button>
+      <button type="button" id="toMineBtn">내 예약 확인·취소</button>
+    </div>
+  </main>
+
+  <!-- 내 예약 확인·취소 -->
+  <main id="mineView" hidden>
+    <section class="step" aria-labelledby="m1">
+      <h2 id="m1">내 예약 확인·취소</h2>
+      <p class="muted">신청할 때 입력한 차량번호와 연락처를 넣어 주세요.</p>
+      <form id="mineForm" class="two" novalidate>
+        <label class="field">차량번호<input id="mPlate" autocomplete="off" placeholder="12가 3456"></label>
+        <label class="field">연락처<input id="mPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" maxlength="13"></label>
+        <button type="submit" class="primary wide" id="mineBtn">조회</button>
+      </form>
+      <p class="form-error" id="mineError" role="alert"></p>
+      <div id="mineList"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>예약 시간대: 09:00~12:00 · 12:00~15:00 · 15:00~18:00</span>
+    <span>정기 등록 차량은 예약 없이 출입할 수 있어요.</span>
+  </footer>
+</div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="apply.js?v=1"></script>
+</body>
+</html>

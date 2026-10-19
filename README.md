@@ -92,7 +92,7 @@
 3. 새 파일을 불러오면 이전 파일 예약은 바뀝니다. DB 예약과 파일 예약은 함께 판정에 쓰입니다.
 
 ### 파일을 고쳐서 다시 올릴 때
-- `sw.js` 맨 위 `VERSION` 숫자를 하나 올리고(예: `v9` → `v10`), `index.html`과 `sw.js` 안의 `?v=9`도 같은 숫자로 바꿔야 기기에 새 버전이 저장됩니다.
+- `sw.js` 맨 위 `VERSION` 숫자를 하나 올리고(예: `v10` → `v11`), `index.html`과 `sw.js` 안의 `?v=10`도 같은 숫자로 바꿔야 기기에 새 버전이 저장됩니다.
 - 탭에서 인터넷이 될 때 앱을 두 번 열면 새 버전으로 바뀝니다.
 
 ## 정기 차량 관리
@@ -112,6 +112,43 @@
 
 - 기간이 지난 정기 차량은 🔴로 판정되고 "등록 기간이 아니에요"가 함께 표시됩니다.
 - 화면 아래 **예약 현황 → 정기 차량** 탭에서 등록된 정기 차량과 기간을 볼 수 있습니다.
+
+## 예약 신청 페이지 (apply.html)
+
+방문자가 휴대폰·PC에서 직접 예약하는 페이지입니다. 신청하면 **바로 확정**되어 확인 앱에 반영됩니다.
+
+- 주소: `https://<아이디>.github.io/plate-reservation/apply.html` (확인 앱과 같은 저장소)
+- 입력: 방문 날짜(오늘~30일 뒤) → 시간대(남은 자리 표시, 마감·지난 시간은 선택 불가) → 차량번호·이름·연락처 → 개인정보 동의
+- 완료 화면에 **예약번호**가 나오고, **내 예약 확인** 탭에서 차량번호+연락처로 조회·취소할 수 있습니다.
+- 같은 차량의 같은 날짜·시간대 중복 신청, 정원 초과, 정기 차량(예약 불필요)은 자동으로 막습니다. 여러 명이 동시에 신청해도 정원을 넘지 않습니다.
+
+### 적용 순서
+1. Supabase **SQL Editor**에서 `supabase-apply.sql` 실행 (한 번만, 다시 실행해도 안전)
+2. GitHub에 `apply.html`, `apply.css`, `apply.js`와 바뀐 `index.html`, `sw.js`, `README.md`, `supabase-apply.sql` 업로드 (`config.js`는 그대로)
+3. 1~2분 뒤 위 주소로 접속해 시험 신청 → 확인 앱에서 그 번호를 조회해 신호 확인
+4. 방문자에게 주소를 안내 (QR 코드로 만들어 붙여 두면 편합니다)
+
+### 운영
+| 하고 싶은 일 | 방법 |
+|---|---|
+| 시간대별 정원 바꾸기 | Table Editor → `slot_capacity` → `capacity` 숫자 수정 (0이면 그 시간대 신청 안 받음) |
+| 신청자 이름·연락처 보기 | Table Editor → `reservation_contacts` (웹페이지에서는 볼 수 없음) |
+| 예약 취소(관리자) | Table Editor → `reservations`에서 그 줄 삭제 (연락처도 함께 삭제됨) |
+| 신청 가능 기간 바꾸기 | `supabase-apply.sql`의 `apply_max_days()` 숫자와 `apply.js`의 `MAX_DAYS`를 같은 값으로 바꾸고 SQL 다시 실행 |
+
+### 개인정보 보관
+- 이름·연락처는 `reservation_contacts` 표에 따로 저장되고, 웹페이지(anon 키)로는 읽을 수 없게 잠겨 있습니다.
+- 동의 화면에 "방문일로부터 30일 후 삭제"라고 안내하므로, 아래 중 하나로 지워 주세요.
+  - 직접: SQL Editor에서 `select public.purge_old_contacts();` 실행 (지운 건수가 나옵니다)
+  - 자동: Supabase 대시보드에서 **Cron(pg_cron)** 기능을 켠 뒤 SQL Editor에서 한 번 실행
+    ```sql
+    select cron.schedule('purge-old-contacts', '0 4 * * *', 'select public.purge_old_contacts()');
+    ```
+- 동의 문구(수집 항목·목적·보관 기간)는 `apply.html`의 "개인정보 수집·이용 동의" 부분에서 실제 운영 기준에 맞게 고쳐 쓰세요.
+
+### 알아둘 점
+- 신청 페이지는 누구나 접속할 수 있어 장난 신청을 완전히 막지는 못합니다. 문제가 되면 관리자 승인 방식이나 문자 인증 추가를 고려하세요.
+- 예약 취소는 신청할 때 쓴 연락처가 맞아야 되며, 지난 예약은 취소할 수 없습니다.
 
 ## 예약 데이터 넣기
 
@@ -174,6 +211,8 @@ window.APP_CONFIG = {
 | `tesseract.min.js`, `worker.min.js`, `tesseract-core-*.wasm.js`, `kor.traineddata.gz` | 번호판 인식 엔진과 한국어 데이터 (인터넷 없이 쓰기 위해 포함) |
 | `supabase.js`, `591.supabase.js` | DB 연결 라이브러리 |
 | `예약예시.csv` | 예약 파일 예시 |
+| `apply.html`, `apply.css`, `apply.js` | 방문자용 예약 신청 페이지 |
+| `supabase-apply.sql` | 신청 페이지용 DB 설정 (연락처 표·정원·신청/조회/취소 함수) |
 
 ## DB 구조 (`reservations` 테이블)
 

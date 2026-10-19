@@ -1,7 +1,8 @@
 {
   "name": "차량 예약 조회",
   "short_name": "예약 조회",
-  "start_url": "./",
+  "id": "check-7k2q.html",
+  "start_url": "check-7k2q.html",
   "scope": "./",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],

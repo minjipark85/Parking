@@ -2,113 +2,13 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>차량 예약 조회</title>
-  <meta name="theme-color" content="#0f131a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="예약 조회">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="style.css?v=10">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>방문 차량 예약</title>
+  <!-- 맨 앞 주소로 들어오면 예약 신청 페이지로 바로 이동 -->
+  <meta http-equiv="refresh" content="0; url=apply.html">
+  <script>location.replace("apply.html" + location.search + location.hash);</script>
 </head>
 <body>
-<div class="app">
-  <header class="top">
-    <h1>차량 예약 조회</h1>
-    <div class="top-right">
-      <div class="net" id="netStatus" data-s="info"><i></i><span>준비 중…</span></div>
-      <div class="today" id="today"></div>
-      <button type="button" class="icon-btn" id="fsBtn" hidden aria-label="전체 화면">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-        <span>전체 화면</span>
-      </button>
-    </div>
-  </header>
-
-  <div class="notice" id="setupNotice" hidden></div>
-
-  <main class="grid">
-    <!-- 왼쪽(세로 화면에선 위): 카메라 + 직접 입력 -->
-    <section class="col scan" aria-label="번호판 확인">
-      <div class="cam" id="camBox" data-s="idle">
-        <video id="video" playsinline muted autoplay></video>
-        <div class="guide" aria-hidden="true"></div>
-        <div class="cam-idle" id="camIdle">
-          <button class="primary big" id="startCam" type="button">카메라 켜기</button>
-          <p>번호판을 가운데 네모 안에 맞추면 자동으로 읽어 예약 여부를 보여줍니다.</p>
-        </div>
-        <div class="cam-status" id="camStatus" hidden>번호판을 찾는 중…</div>
-        <button type="button" class="cam-stop" id="stopCam" hidden>카메라 끄기</button>
-      </div>
-
-      <div class="manual">
-        <div class="plate">
-          <div class="strip" aria-hidden="true">KOR</div>
-          <input id="plateInput" autocomplete="off" spellcheck="false" placeholder="12가 3456" aria-label="차량번호">
-        </div>
-        <button class="primary" id="checkBtn" type="button">예약 확인</button>
-        <label class="btn" id="camBtn">
-          <span id="camLabel">사진으로 인식</span>
-          <input id="camInput" type="file" accept="image/*">
-        </label>
-      </div>
-    </section>
-
-    <!-- 오른쪽(세로 화면에선 아래): 신호 + 예약 현황 -->
-    <section class="col side" aria-label="확인 결과와 예약 현황">
-      <div class="result" id="result" data-s="idle" aria-live="polite">
-        <div class="verdict"><span class="dot"></span>대기 중</div>
-        <div class="sub">카메라를 켜거나 번호를 입력하면 여기에 예약 여부가 표시됩니다.</div>
-      </div>
-
-      <ul class="legend" aria-label="신호 안내">
-        <li><i class="lamp ok"></i>오늘 · 지금 시간대</li>
-        <li><i class="lamp warn"></i>오늘 · 다른 시간대</li>
-        <li><i class="lamp bad"></i>오늘 예약 아님</li>
-        <li><i class="lamp reg"></i>정기 차량</li>
-      </ul>
-
-      <div class="panel ledger-panel">
-        <div class="ledger-top">
-          <h2>예약 현황</h2>
-          <div class="slots" aria-label="예약 시간대"><b>09~12</b><b>12~15</b><b>15~18</b></div>
-        </div>
-        <div class="ledger-head">
-          <div class="seg" role="group" aria-label="보기">
-            <button type="button" id="vToday" aria-pressed="true">오늘</button>
-            <button type="button" id="vUp" aria-pressed="false">오늘 이후</button>
-            <button type="button" id="vReg" aria-pressed="false">정기 차량</button>
-          </div>
-          <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
-        </div>
-        <div id="ledger" class="ledger"><p class="empty">예약 목록을 불러오는 중…</p></div>
-        <details class="file-box" id="fileBox">
-          <summary>예약 파일 (CSV) <span id="fileCount"></span></summary>
-          <div class="file-actions">
-            <label class="btn small" id="csvBtn">
-              <span>예약 파일 불러오기 (CSV)</span>
-              <input id="csvInput" type="file" accept=".csv,text/csv,text/plain">
-            </label>
-            <button type="button" class="small" id="clearFile" hidden>파일 예약 지우기</button>
-          </div>
-          <p class="file-info" id="fileInfo"></p>
-          <p class="file-msg" id="fileMsg" role="status"></p>
-          <p class="file-help">형식: 예약일자,예약시간,차량번호 — 예) 2026-10-20,09:00,12가3456 · 정기 차량은 첫 칸에 "정기" — 예) 정기,,11가1111,관리사무소 (엑셀에서 CSV로 저장한 파일도 됩니다)</p>
-        </details>
-      </div>
-    </section>
-  </main>
-</div>
-
-<!-- 모든 라이브러리를 앱 안에 포함 — 인터넷 없이 동작 (폴더 없이 한 곳에 두면 됨) -->
-<script src="supabase.js"></script>
-<script src="tesseract.min.js"></script>
-<script src="config.js"></script>
-<script src="app.js?v=10"></script>
+  <p><a href="apply.html">방문 차량 예약 페이지로 이동</a></p>
 </body>
 </html>

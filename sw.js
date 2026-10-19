@@ -1,14 +1,13 @@
 // 서비스 워커: 앱 파일을 기기에 저장해 두고 인터넷 없이도 열리게 한다.
 // 앱 파일을 고쳐서 올릴 때는 아래 VERSION 숫자를 하나 올리세요. (예: v7 → v8)
-const VERSION = "v10";
+const VERSION = "v11";
 const APP_CACHE = `plate-app-${VERSION}`;
 const FONT_CACHE = "plate-fonts";
 
 const FILES = [
-  "./",
-  "index.html",
-  "style.css?v=10",
-  "app.js?v=10",
+  "check-7k2q.html",
+  "style.css?v=11",
+  "app.js?v=11",
   "config.js",
   "manifest.webmanifest",
   "icon.svg",
@@ -65,12 +64,12 @@ self.addEventListener("fetch", (e) => {
   }
 
   // 페이지 열기: 인터넷이 되면 최신 화면, 안 되면 저장된 화면
-  // (확인 앱 index.html 과 신청 페이지 apply.html 을 각자 자기 이름으로 저장)
+  // (확인 앱 check-7k2q.html 과 신청 페이지 apply.html 을 각자 자기 이름으로 저장)
   if (req.mode === "navigate") {
     const key = url.pathname.endsWith("/") ? "index.html" : url.pathname.split("/").pop();
     e.respondWith(
       fetch(req).then((res) => { if (res.ok) caches.open(APP_CACHE).then((c) => c.put(key, res.clone())); return res; })
-        .catch(() => caches.match(key, { ignoreSearch: true }).then((hit) => hit || caches.match("index.html")))
+        .catch(() => caches.match(key, { ignoreSearch: true }).then((hit) => hit || caches.match("check-7k2q.html")))
     );
     return;
   }

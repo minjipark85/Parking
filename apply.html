@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="apply.css?v=1">
+  <link rel="stylesheet" href="apply.css?v=2">
 </head>
 <body>
 <div class="page">
@@ -29,11 +29,15 @@
 
   <!-- 예약 신청 -->
   <main id="applyView">
+    <section class="step closed" id="closedNote" hidden>
+      <h2>예약 기간이 끝났어요</h2>
+      <p class="muted">2026년 10월 24일 ~ 11월 22일 토·일요일 예약을 받았습니다. 이미 한 예약은 [내 예약 확인]에서 볼 수 있어요.</p>
+    </section>
     <form id="applyForm" novalidate>
       <section class="step" aria-labelledby="s1">
         <h2 id="s1"><span class="num">1</span>방문 날짜</h2>
+        <p class="period">예약 기간 <b>10월 24일 ~ 11월 22일</b> · <b>토·일요일</b>만</p>
         <div class="dates" id="dateStrip" role="radiogroup" aria-label="방문 날짜"></div>
-        <label class="other-date">다른 날짜 고르기 <input type="date" id="fDate"></label>
       </section>
 
       <section class="step" aria-labelledby="s2">
@@ -131,6 +135,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="apply.js?v=1"></script>
+<script src="apply.js?v=2"></script>
 </body>
 </html>

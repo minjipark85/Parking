@@ -6,7 +6,9 @@
   var pad = function (n) { return String(n).padStart(2, "0"); };
   var ymd = function (d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
   var DOW = ["일", "월", "화", "수", "목", "금", "토"];
-  var MAX_DAYS = 30;                       // supabase-apply.sql 의 apply_max_days() 와 같게
+  // 예약 가능한 날짜 — supabase-apply.sql 의 apply_date_allowed() 와 같게 맞추세요
+  var OPEN_START = "2026-10-24", OPEN_END = "2026-11-22";
+  var OPEN_DAYS = [6, 0];                  // 요일: 0=일 1=월 … 6=토  → 토·일만
   var SLOTS = [{ s: "09:00", e: "12:00" }, { s: "12:00", e: "15:00" }, { s: "15:00", e: "18:00" }];
   var norm = function (s) { return String(s || "").replace(/[\s\-·.]/g, "").toUpperCase(); };
   var PLATE_RE = /^([가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
@@ -36,7 +38,7 @@
     duplicate: "이 차량은 같은 날짜·시간대에 이미 예약돼 있어요. [내 예약 확인]에서 볼 수 있어요.",
     regular: "정기 등록 차량이에요. 예약 없이 출입할 수 있어요.",
     slot_over: "이미 지난 시간대예요. 다른 시간대를 골라 주세요.",
-    bad_date: "오늘부터 " + MAX_DAYS + "일 안의 날짜만 예약할 수 있어요.",
+    bad_date: "예약은 10월 24일 ~ 11월 22일의 토·일요일만 받아요.",
     bad_slot: "시간대를 골라 주세요.",
     bad_plate: "차량번호 형식을 확인해 주세요. 예: 12가3456",
     bad_name: "이름을 입력해 주세요.",
@@ -54,7 +56,7 @@
   }
   $("tabApply").addEventListener("click", function () { show("apply"); loadSlots(); });
   $("tabMine").addEventListener("click", function () { show("mine"); });
-  $("againBtn").addEventListener("click", function () { show("apply"); loadSlots(); });
+  $("againBtn").addEventListener("click", function () { show("apply"); renderDates(); loadSlots(); });
   $("toMineBtn").addEventListener("click", function () {
     $("mPlate").value = lastDone.plate || ""; $("mPhone").value = lastDone.phone || "";
     show("mine"); if (lastDone.plate) loadMine();
@@ -62,29 +64,39 @@
 
   // ---------- 1. 날짜 ----------
   var today = new Date(); today.setHours(0, 0, 0, 0);
-  var maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + MAX_DAYS);
-  var selDate = ymd(today), selSlot = "", avail = {};
-  $("fDate").min = ymd(today); $("fDate").max = ymd(maxDate);
+  var parseD = function (s) { var p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  // 기간 안의 토·일 목록
+  var OPEN_LIST = [];
+  for (var d0 = parseD(OPEN_START); d0 <= parseD(OPEN_END); d0.setDate(d0.getDate() + 1)) {
+    if (OPEN_DAYS.indexOf(d0.getDay()) >= 0) OPEN_LIST.push(ymd(d0));
+  }
+  var dateOpen = function (v) { return OPEN_LIST.indexOf(v) >= 0 && v >= ymd(today); };
+  var upcoming = OPEN_LIST.filter(dateOpen);
+  var selDate = upcoming[0] || "", selSlot = "", avail = {};
 
   function renderDates() {
-    var html = "";
-    for (var i = 0; i < 14; i++) {
-      var d = new Date(today); d.setDate(d.getDate() + i);
-      var v = ymd(d), cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "";
-      html += '<button type="button" class="date-chip' + cls + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '">' +
-        '<span class="dw">' + (i === 0 ? "오늘" : i === 1 ? "내일" : DOW[d.getDay()]) + '</span>' +
+    var html = "", t = ymd(today), t1 = new Date(today); t1.setDate(t1.getDate() + 1); t1 = ymd(t1);
+    OPEN_LIST.forEach(function (v) {
+      var d = parseD(v), past = v < t, cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "";
+      html += '<button type="button" class="date-chip' + cls + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '"' + (past ? " disabled" : "") + '>' +
+        '<span class="dw">' + (v === t ? "오늘" : v === t1 ? "내일" : DOW[d.getDay()]) + '</span>' +
         '<span class="dd">' + d.getDate() + '</span><span class="dl">' + (d.getMonth() + 1) + '월</span></button>';
-    }
+    });
     $("dateStrip").innerHTML = html;
+    if (!upcoming.length) closeApplications();
+  }
+  // 예약 기간이 모두 끝났을 때
+  function closeApplications() {
+    $("applyForm").hidden = true;
+    $("closedNote").hidden = false;
   }
   $("dateStrip").addEventListener("click", function (e) {
-    var b = e.target.closest(".date-chip"); if (!b) return;
+    var b = e.target.closest(".date-chip"); if (!b || b.disabled) return;
     pickDate(b.dataset.date);
   });
-  $("fDate").addEventListener("change", function () { if (this.value) pickDate(this.value); });
   function pickDate(v) {
-    if (v < ymd(today) || v > ymd(maxDate)) { setError(ERR.bad_date); return; }
-    selDate = v; selSlot = ""; $("fDate").value = v;
+    if (!dateOpen(v)) { setError(ERR.bad_date); return; }
+    selDate = v; selSlot = "";
     Array.prototype.forEach.call(document.querySelectorAll(".date-chip"), function (c) { c.setAttribute("aria-checked", String(c.dataset.date === v)); });
     setError(""); loadSlots();
   }
@@ -92,6 +104,7 @@
   // ---------- 2. 시간대 (남은 자리) ----------
   var slotsReq = 0;
   function loadSlots() {
+    if (!selDate) return;
     if (!sb) { renderSlots(null); return; }
     var my = ++slotsReq;
     $("slotList").setAttribute("aria-busy", "true");
@@ -153,6 +166,7 @@
 
   function updateSummary() {
     var s = $("summary");
+    if (!selDate) { s.textContent = "예약 가능한 날짜가 없어요."; return; }
     if (!selSlot) { s.innerHTML = "<b>" + dateLabel(selDate) + "</b> · 시간대를 골라 주세요."; return; }
     var p = norm($("fPlate").value);
     s.innerHTML = "<b>" + dateLabel(selDate) + " " + slotLabel(selSlot) + "</b>" + (PLATE_RE.test(p) ? " · " + esc(pretty(p)) : "");
@@ -165,6 +179,7 @@
     e.preventDefault();
     var plate = norm($("fPlate").value), name = $("fName").value.trim(), phone = digits($("fPhone").value);
     if (!sb) return setError("지금은 예약 신청을 받을 수 없어요.");
+    if (!dateOpen(selDate)) return setError(ERR.bad_date);
     if (!selSlot) return setError(ERR.bad_slot);
     if (!PLATE_RE.test(plate)) { $("fPlate").focus(); return setError(ERR.bad_plate); }
     if (!name) { $("fName").focus(); return setError(ERR.bad_name); }

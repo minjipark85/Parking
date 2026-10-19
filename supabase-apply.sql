@@ -35,10 +35,16 @@ drop policy if exists "read slot capacity" on public.slot_capacity;
 create policy "read slot capacity" on public.slot_capacity for select using (true);
 
 -- ------------------------------------------------------------
--- 3) 신청 규칙 (여기 숫자만 바꾸면 됩니다)
+-- 3) 예약 가능한 날짜 (여기만 바꾸면 됩니다 — apply.js 맨 위 OPEN_START·OPEN_END·OPEN_DAYS도 같게)
+--    2026-10-24 ~ 2026-11-22 기간의 토요일·일요일만
+--    요일 번호: 1=월 2=화 3=수 4=목 5=금 6=토 7=일
 -- ------------------------------------------------------------
-create or replace function public.apply_max_days() returns int
-language sql immutable as $$ select 30 $$;          -- 오늘부터 며칠 뒤까지 신청 가능
+create or replace function public.apply_date_allowed(p_date date) returns boolean
+language sql immutable as $$
+  select p_date between date '2026-10-24' and date '2026-11-22'
+     and extract(isodow from p_date) in (6, 7)
+$$;
+drop function if exists public.apply_max_days();     -- 예전 규칙(오늘~30일) 삭제
 
 -- ------------------------------------------------------------
 -- 4) 날짜별 남은 자리 조회
@@ -85,8 +91,8 @@ begin
   if p_slot is null or p_slot not in ('09:00', '12:00', '15:00') then
     return json_build_object('ok', false, 'error', 'bad_slot');
   end if;
-  if p_date is null or p_date < v_today or p_date > v_today + apply_max_days() then
-    return json_build_object('ok', false, 'error', 'bad_date');
+  if p_date is null or p_date < v_today or not apply_date_allowed(p_date) then
+    return json_build_object('ok', false, 'error', 'bad_date');      -- 예약 기간·요일이 아님
   end if;
   if p_date = v_today and v_now::time >= p_slot + interval '3 hours' then
     return json_build_object('ok', false, 'error', 'slot_over');      -- 이미 끝난 시간대
@@ -174,6 +180,7 @@ revoke all on function public.request_reservation(date, time, text, text, text) 
 revoke all on function public.my_reservations(text, text) from public;
 revoke all on function public.cancel_reservation(uuid, text) from public;
 grant execute on function public.slot_availability(date) to anon, authenticated;
+grant execute on function public.apply_date_allowed(date) to anon, authenticated;
 grant execute on function public.request_reservation(date, time, text, text, text) to anon, authenticated;
 grant execute on function public.my_reservations(text, text) to anon, authenticated;
 grant execute on function public.cancel_reservation(uuid, text) to anon, authenticated;

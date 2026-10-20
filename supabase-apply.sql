@@ -20,19 +20,41 @@ alter table public.reservation_contacts enable row level security;
 revoke all on public.reservation_contacts from anon, authenticated;
 
 -- ------------------------------------------------------------
--- 2) 시간대별 정원 — 숫자는 Table Editor → slot_capacity 에서 언제든 바꾸면 됩니다.
---    0으로 두면 그 시간대는 신청을 받지 않습니다.
+-- 2) 시간대별 정원
+--    · 기본 정원: slot_capacity (시간대마다 200)
+--    · 날짜별 정원: date_slot_capacity — 관리자 페이지(admin-7k2q.html)에서 날짜·시간대마다 바꿈
+--    · 날짜별 정원이 있으면 그것을, 없으면 기본 정원을 씁니다. 0이면 그 시간대는 신청을 받지 않습니다.
 -- ------------------------------------------------------------
 create table if not exists public.slot_capacity (
   slot     time primary key check (slot in ('09:00', '12:00', '15:00')),
   capacity int  not null check (capacity >= 0)
 );
 insert into public.slot_capacity (slot, capacity) values
-  ('09:00', 20), ('12:00', 20), ('15:00', 20)
+  ('09:00', 200), ('12:00', 200), ('15:00', 200)
 on conflict (slot) do nothing;
+update public.slot_capacity set capacity = 200 where capacity = 20;   -- 예전 기본값(20) → 200
 alter table public.slot_capacity enable row level security;
 drop policy if exists "read slot capacity" on public.slot_capacity;
 create policy "read slot capacity" on public.slot_capacity for select using (true);
+
+create table if not exists public.date_slot_capacity (
+  open_date date not null,
+  slot      time not null check (slot in ('09:00', '12:00', '15:00')),
+  capacity  int  not null check (capacity between 0 and 100000),
+  primary key (open_date, slot)
+);
+alter table public.date_slot_capacity enable row level security;     -- 정책 없음 = 관리자 함수로만 바꿈
+revoke all on public.date_slot_capacity from anon, authenticated;
+
+-- 그 날짜·시간대의 정원 (날짜별 → 기본 → 200)
+create or replace function public.slot_cap(p_date date, p_slot time) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select capacity from date_slot_capacity where open_date = p_date and slot = p_slot),
+    (select capacity from slot_capacity where slot = p_slot),
+    200);
+$$;
+revoke all on function public.slot_cap(date, time) from public;
 
 -- ------------------------------------------------------------
 -- 3) 예약 가능한 날짜 — open_dates 표에 있는 날짜만 (관리자 페이지에서 열고 닫음)
@@ -63,11 +85,11 @@ drop function if exists public.apply_max_days();     -- 예전 규칙(오늘~30�
 create or replace function public.slot_availability(p_date date)
 returns table (slot time, capacity int, booked int)
 language sql stable security definer set search_path = public as $$
-  select c.slot, c.capacity,
+  select s.slot, slot_cap(p_date, s.slot),
          (select count(*)::int from reservations r
-           where r.reserve_date = p_date and r.reserve_time = c.slot) as booked
-  from slot_capacity c
-  order by c.slot;
+           where r.reserve_date = p_date and r.reserve_time = s.slot) as booked
+  from (values (time '09:00'), (time '12:00'), (time '15:00')) as s(slot)
+  order by s.slot;
 $$;
 
 -- ------------------------------------------------------------
@@ -129,7 +151,7 @@ begin
     return json_build_object('ok', false, 'error', 'duplicate');
   end if;
 
-  select capacity into v_cap from slot_capacity where slot = p_slot;
+  v_cap := slot_cap(p_date, p_slot);
   select count(*) into v_booked from reservations where reserve_date = p_date and reserve_time = p_slot;
   if coalesce(v_cap, 0) <= v_booked then
     return json_build_object('ok', false, 'error', 'full');

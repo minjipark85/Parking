@@ -171,7 +171,7 @@
 ### 운영
 | 하고 싶은 일 | 방법 |
 |---|---|
-| 시간대별 정원 바꾸기 | Table Editor → `slot_capacity` → `capacity` 숫자 수정 (0이면 그 시간대 신청 안 받음) |
+| 시간대별 정원 바꾸기 | 날짜별: 관리자 페이지의 **시간대별 정원** 칸 · 기본값(200): Table Editor → `slot_capacity` (0이면 신청 안 받음) |
 | 신청자 이름·연락처 보기 | Table Editor → `reservation_contacts` (웹페이지에서는 볼 수 없음) |
 | 예약 취소(관리자) | Table Editor → `reservations`에서 그 줄 삭제 (연락처도 함께 삭제됨) |
 | 예약 가능 날짜 바꾸기 | 관리자 페이지(`admin-7k2q.html`)에서 열기·닫기 (아래 **예약 개설 관리**) |
@@ -202,11 +202,16 @@
   - 예) 11월분을 미리 넣어 두고 공개 일시를 `11/1 10:00`으로 지정하면, 그 시각부터 신청 페이지에 나타납니다.
   - 이미 열린 날을 다시 열면 공개 일시만 바뀝니다.
 - **닫기**: 날짜 선택 → **선택한 날 닫기**를 두 번 누름. 신청 페이지에서 바로 사라지지만 **이미 받은 예약은 그대로 유지**됩니다(취소가 필요하면 Table Editor에서).
+- **시간대별 정원**: 날짜를 고르면 아래에 09~12시·12~15시·15~18시 정원 칸이 나옵니다. 숫자를 바꾸고 **정원만 저장**(이미 연 날) 또는 **선택한 날 열기**(새로 열면서 함께 저장)를 누르세요.
+  - 기본 정원은 시간대마다 **200**이고, 따로 정하지 않은 날짜는 기본 정원을 씁니다. (기본값 자체는 Table Editor → `slot_capacity`)
+  - 여러 날을 함께 고르면 같은 숫자로 한꺼번에 바뀝니다. 날짜마다 다른 칸은 "날짜마다 다름"으로 비어 있고, 비워 두면 그 시간대는 그대로입니다.
+  - 0으로 하면 그 시간대는 신청을 받지 않습니다. 이미 받은 예약보다 적게 하면 한 번 더 확인하고, 기존 예약은 유지된 채 추가 신청만 막힙니다.
+  - 아래 **앞으로 열려 있는 날짜** 목록에 시간대별 `예약 건수/정원`이 나옵니다.
 - 지난 날짜는 고를 수 없습니다. 신청 페이지는 1분마다 날짜 목록을 새로 받아오고, 닫힌 날로 억지로 신청해도 DB에서 거절합니다.
 - 처음 설치하면 기존 기간(2026-10-24 ~ 11-22 토·일)이 그대로 열려 있습니다.
 
 ### 적용 순서
-1. Supabase **SQL Editor**에서 `supabase-opendates.sql` 실행 (`supabase-apply.sql`, `supabase-staff.sql`을 실행한 뒤에. 다시 실행해도 안전)
+1. Supabase **SQL Editor**에서 `supabase-apply.sql`을 다시 실행한 뒤 `supabase-opendates.sql` 실행 (`supabase-apply.sql`, `supabase-staff.sql`을 실행한 뒤에. 다시 실행해도 안전)
 2. **Table Editor → `staff_emails`** 에서 관리자 계정 줄의 **`is_admin`** 을 체크(true) — 관리자도 직원 명단에 있어야 하고, Authentication에 계정이 있어야 합니다.
 3. GitHub에 `admin-7k2q.html`, `admin.js`, `admin.css`, 바뀐 `check-7k2q.html`, `app.js`, `style.css`, `sw.js`, `apply.js`, `apply.html`, `supabase-apply.sql`, `supabase-opendates.sql`, `README.md` 업로드 (`config.js`는 그대로)
 4. 관리자 주소로 로그인 → 달력에서 날짜 확인
@@ -277,7 +282,7 @@ window.APP_CONFIG = {
 | `supabase-apply.sql` | 신청 페이지용 DB 설정 (연락처 표·정원·신청/조회/취소 함수) |
 | `supabase-staff.sql` | 직원 명단 표 + 예약·정기 차량 표를 직원만 읽게 잠금 |
 | `admin-7k2q.html`, `admin.css`, `admin.js` | 관리자용 예약 개설 관리(달력) 페이지 |
-| `supabase-opendates.sql` | 관리자 지정(`is_admin`) + 예약 개설일 표·함수 |
+| `supabase-opendates.sql` | 관리자 지정(`is_admin`) + 예약 개설일·날짜별 정원 관리 함수 |
 
 ## DB 구조 (`reservations` 테이블)
 

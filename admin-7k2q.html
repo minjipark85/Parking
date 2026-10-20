@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=4">
-  <link rel="stylesheet" href="admin.css?v=3">
+  <link rel="stylesheet" href="admin.css?v=6">
 </head>
 <body>
 <div class="page admin">
@@ -70,6 +70,13 @@
           <input type="datetime-local" id="opensAt" disabled>
         </label>
       </fieldset>
+      <fieldset class="caps" id="capsBox" disabled>
+        <legend>시간대별 정원 <span class="muted-in">(기본 200 · 비워 두면 그대로)</span></legend>
+        <label class="cap"><span>09~12시</span><input type="number" id="cap09" min="0" max="100000" step="1" inputmode="numeric"><small id="bk09"></small></label>
+        <label class="cap"><span>12~15시</span><input type="number" id="cap12" min="0" max="100000" step="1" inputmode="numeric"><small id="bk12"></small></label>
+        <label class="cap"><span>15~18시</span><input type="number" id="cap15" min="0" max="100000" step="1" inputmode="numeric"><small id="bk15"></small></label>
+        <button type="button" class="small" id="capBtn">정원만 저장</button>
+      </fieldset>
       <p class="form-error" id="actError" role="alert"></p>
       <div class="row-buttons">
         <button type="button" class="primary" id="openBtn" disabled>선택한 날 열기</button>
@@ -80,6 +87,7 @@
 
     <section class="step" aria-labelledby="sumTitle">
       <h2 id="sumTitle">앞으로 열려 있는 날짜</h2>
+      <p class="muted">시간대별 숫자는 <b>예약 건수 / 정원</b>이에요.</p>
       <div id="summary" class="summary-list"><p class="muted">불러오는 중…</p></div>
     </section>
   </main>
@@ -87,6 +95,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=3"></script>
+<script src="admin.js?v=6"></script>
 </body>
 </html>

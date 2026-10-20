@@ -71,7 +71,10 @@
 
   // ---------- 달력 ----------
   var cur = new Date(); cur.setDate(1);           // 보고 있는 달
-  var days = {};                                   // "YYYY-MM-DD" → {is_open, opens_at, booked}
+  var days = {};                                   // "YYYY-MM-DD" → {is_open, opens_at, booked, cap_09.., bk_09..}
+  var info = {};                                   // 다른 달·요약에서 받은 날짜 정보 (선택한 날의 정원 표시용)
+  var SLOTS = ["09", "12", "15"], SLOT_NAME = { "09": "09시", "12": "12시", "15": "15시" };
+  var getX = function (v) { return days[v] || info[v]; };
   var selected = {};                               // 고른 날짜
 
   function loadMonth() {
@@ -81,7 +84,7 @@
     return sb.rpc("admin_list_dates", { p_from: ymd(first), p_to: ymd(last) }).then(function (r) {
       if (r.error) throw r.error;
       days = {};
-      r.data.forEach(function (x) { days[String(x.day).slice(0, 10)] = x; });
+      r.data.forEach(function (x) { var v = String(x.day).slice(0, 10); days[v] = x; info[v] = x; });
       renderMonth();
     }).catch(function (e) { console.error(e); $("calGrid").innerHTML = '<p class="muted">달력을 불러오지 못했어요. 다시 시도해 주세요.</p>'; })
       .then(function () { $("calGrid").removeAttribute("aria-busy"); });
@@ -100,7 +103,8 @@
       var label = st === "open" ? "예약 받는 중" : st === "sched" ? stamp(x.opens_at) + " 공개" : "";
       html += '<button type="button" role="gridcell" class="day ' + st + (past ? " past" : "") + (wd === 0 ? " sun" : wd === 6 ? " sat" : "") + '" data-date="' + v + '" aria-selected="' + (!!selected[v]) + '"' + (past ? ' aria-disabled="true"' : "") +
         ' aria-label="' + md(v) + " " + (label || "닫힘") + (x && x.booked ? " 예약 " + x.booked + "건" : "") + '">' +
-        '<span class="n">' + d + '</span><span class="st"><span class="lg">' + label + '</span><span class="sh">' + (st === "open" ? "열림" : st === "sched" ? "예정" : "") + '</span></span>' + (x && x.booked ? '<span class="bk">예약 ' + x.booked + '</span>' : "") + '</button>';
+        '<span class="n">' + d + '</span><span class="st"><span class="lg">' + label + '</span><span class="sh">' + (st === "open" ? "열림" : st === "sched" ? "예정" : "") + '</span></span>' + (x && x.booked ? '<span class="bk">예약 ' + x.booked + '</span>' : "") +
+        (x && st !== "closed" && x.cap_09 != null ? '<span class="cp" title="시간대별 정원">' + x.cap_09 + "·" + x.cap_12 + "·" + x.cap_15 + '</span>' : "") + '</button>';
     }
     $("calGrid").innerHTML = html;
     renderSelection();
@@ -133,7 +137,71 @@
     $("openBtn").disabled = !s.length; $("closeBtn").disabled = !s.length;
     var cb = $("closeBtn"); cb.classList.remove("arm"); cb.textContent = "선택한 날 닫기";
     $("actError").textContent = "";
+    fillCaps(s);
   }
+  // 고른 날들의 정원: 모두 같으면 그 숫자, 다르면 빈칸("날짜마다 다름")
+  function fillCaps(s) {
+    $("capsBox").disabled = !s.length;
+    disarmCap();
+    SLOTS.forEach(function (k) {
+      var inp = $("cap" + k), vals = [], maxBk = 0, known = true;
+      s.forEach(function (v) {
+        var x = getX(v);
+        if (!x || x["cap_" + k] == null) { known = false; return; }
+        vals.push(x["cap_" + k]); maxBk = Math.max(maxBk, x["bk_" + k] || 0);
+      });
+      var same = known && vals.length && vals.every(function (c) { return c === vals[0]; });
+      inp.value = same ? String(vals[0]) : "";
+      inp.dataset.orig = inp.value;
+      inp.placeholder = !s.length ? "" : same ? "" : known ? "날짜마다 다름" : "그대로";
+      inp.classList.remove("chg");
+      inp.dataset.bk = String(maxBk);
+      var hint = $("bk" + k);
+      hint.textContent = !s.length ? "" : maxBk ? (s.length > 1 ? "최대 " : "") + "예약 " + maxBk + "건" : "예약 없음";
+      hint.classList.remove("over");
+    });
+  }
+  // 입력한 정원 읽기 — 빈칸은 null(그대로), 잘못된 숫자는 err
+  function readCaps() {
+    var out = { any: false, changed: false, over: [] }, s = selDates();
+    for (var i = 0; i < SLOTS.length; i++) {
+      var k = SLOTS[i], raw = $("cap" + k).value.trim();
+      if (raw === "") { out[k] = null; continue; }
+      if (!/^\d+$/.test(raw) || Number(raw) > 100000) { out.err = SLOT_NAME[k] + " 정원은 0 ~ 100000 사이 숫자로 넣어 주세요."; return out; }
+      out[k] = Number(raw); out.any = true;
+      if (raw !== $("cap" + k).dataset.orig) out.changed = true;
+      s.forEach(function (v) { var x = getX(v); if (x && (x["bk_" + k] || 0) > out[k]) out.over.push(md(v) + " " + SLOT_NAME[k] + "(예약 " + x["bk_" + k] + "건)"); });
+    }
+    return out;
+  }
+  function saveCaps(s, c) {
+    return sb.rpc("admin_set_caps", { p_dates: s, p_c09: c["09"], p_c12: c["12"], p_c15: c["15"] }).then(function (r) { if (r.error) throw r.error; });
+  }
+  function disarmCap() { var b = $("capBtn"); b.classList.remove("arm"); b.textContent = "정원만 저장"; }
+  SLOTS.forEach(function (k) {
+    $("cap" + k).addEventListener("input", function () {
+      this.classList.toggle("chg", this.value.trim() !== this.dataset.orig);
+      var v = this.value.trim(), bk = Number(this.dataset.bk || 0);
+      $("bk" + k).classList.toggle("over", v !== "" && /^\d+$/.test(v) && Number(v) < bk);
+      disarmCap(); $("actError").textContent = "";
+    });
+  });
+  $("capBtn").addEventListener("click", function () {
+    var s = selDates(); if (!s.length) return;
+    var c = readCaps(), b = this;
+    if (c.err) { $("actError").textContent = c.err; return; }
+    if (!c.any) { $("actError").textContent = "바꿀 정원 숫자를 넣어 주세요."; return; }
+    if (c.over.length && !b.classList.contains("arm")) {   // 이미 받은 예약보다 적으면 한 번 더 확인
+      b.classList.add("arm"); b.textContent = "그래도 저장";
+      $("actError").textContent = "이미 받은 예약보다 정원이 적어요: " + c.over.slice(0, 4).join(", ") + (c.over.length > 4 ? " 외 " + (c.over.length - 4) + "곳" : "") + ". 기존 예약은 유지되고 추가 신청만 막혀요.";
+      return;
+    }
+    b.disabled = true;
+    saveCaps(s, c).then(function () {
+      afterChange(s.length + "일의 정원을 저장했어요 · " + SLOTS.filter(function (k) { return c[k] != null; }).map(function (k) { return SLOT_NAME[k] + " " + c[k]; }).join(", "));
+    }).catch(function (e) { console.error(e); $("actError").textContent = "정원을 저장하지 못했어요. 다시 시도해 주세요."; })
+      .then(function () { b.disabled = false; disarmCap(); });
+  });
   Array.prototype.forEach.call(document.querySelectorAll('input[name="when"]'), function (r) {
     r.addEventListener("change", function () {
       var later = document.querySelector('input[name="when"]:checked').value === "later";
@@ -155,10 +223,14 @@
       at = new Date($("opensAt").value);
       if (isNaN(at)) { $("actError").textContent = "공개 일시를 다시 확인해 주세요."; return; }
     }
+    var c = readCaps();
+    if (c.err) { $("actError").textContent = c.err; return; }
     var btn = this; btn.disabled = true;
     sb.rpc("admin_open_dates", { p_dates: s, p_opens_at: at ? at.toISOString() : null }).then(function (r) {
       if (r.error) throw r.error;
-      afterChange(s.length + "일을 열었어요" + (at ? " · " + stamp(at.toISOString()) + "에 공개돼요." : " · 지금부터 신청 페이지에 보여요."));
+      return c.changed ? saveCaps(s, c) : null;                  // 정원 칸을 바꿨으면 함께 저장
+    }).then(function () {
+      afterChange(s.length + "일을 열었어요" + (at ? " · " + stamp(at.toISOString()) + "에 공개돼요." : " · 지금부터 신청 페이지에 보여요.") + (c.changed ? " 정원도 저장했어요." : ""));
     }).catch(function (e) { console.error(e); $("actError").textContent = "열지 못했어요. 관리자 계정인지, 인터넷 연결을 확인하세요."; })
       .then(function () { btn.disabled = !selDates().length; });
   });
@@ -185,11 +257,14 @@
     var from = new Date(), to = new Date(); to.setDate(to.getDate() + 365);
     sb.rpc("admin_list_dates", { p_from: ymd(from), p_to: ymd(to) }).then(function (r) {
       if (r.error) throw r.error;
+      r.data.forEach(function (x) { info[String(x.day).slice(0, 10)] = x; });
+      if (selDates().length) fillCaps(selDates());
       var list = r.data.filter(function (x) { return x.is_open; });
       if (!list.length) { $("summary").innerHTML = '<p class="muted">열려 있는 날짜가 없어요. 신청 페이지에는 "예약 가능한 날짜가 없어요"가 보여요.</p>'; return; }
       $("summary").innerHTML = list.map(function (x) {
         var v = String(x.day).slice(0, 10), st = dayState(x);
-        return '<div class="sum-row"><span>' + md(v) + '</span><span class="when2 ' + st + '">' + (st === "open" ? "예약 받는 중" : stamp(x.opens_at) + " 공개 예정") + '</span>' +
+        var capLine = x.cap_09 == null ? "" : '<small class="caps-line">' + SLOTS.map(function (k) { var bk = x["bk_" + k] || 0, txt = SLOT_NAME[k] + " " + bk + "/" + x["cap_" + k]; return '<span class="ci">' + (bk > x["cap_" + k] ? '<b class="over" title="정원보다 예약이 많아요">' + txt + '</b>' : txt) + '</span>'; }).join(" · ") + '</small>';
+        return '<div class="sum-row"><span>' + md(v) + capLine + '</span><span class="when2 ' + st + '">' + (st === "open" ? "예약 받는 중" : stamp(x.opens_at) + " 공개 예정") + '</span>' +
           '<span class="meta">예약 ' + (x.booked || 0) + '건</span></div>';
       }).join("");
     }).catch(function (e) { console.error(e); $("summary").innerHTML = '<p class="muted">불러오지 못했어요.</p>'; });

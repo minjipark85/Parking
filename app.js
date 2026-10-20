@@ -77,7 +77,11 @@
   // 정기 차량은 사전 예약과 상관없이 등록 기간(비어 있으면 무기한) 동안 항상 출입 가능
   const allRegs = () => store.regDb.concat(store.regFile);
   const regActive = (r, day) => (!r.from || r.from <= day) && (!r.until || r.until >= day);
-  const regMatch = (r, q) => r.p === q || (q.length >= 7 && r.p.endsWith(q));
+  // 같은 차량: 완전히 같거나, 한쪽에만 지역명("서울")이 붙은 경우 (예전 번호판은 지역명까지 읽힘)
+  //  (끝부분만 같다고 같은 차가 아님: 112가3456 ≠ 12가3456 → 앞의 한글 두 글자(지역명)만 떼고 비교)
+  const noRegion = (p) => p.replace(/^[가-힣]{2}(?=\d)/, "");
+  const sameCar = (a, b) => a === b || noRegion(a) === noRegion(b);
+  const regMatch = (r, q) => sameCar(r.p, q);
   const activeRegs = () => { const t = todayStr(); return allRegs().filter((r) => regActive(r, t)); };
   // 인식 결과를 DB 번호와 맞춰 볼 때 쓰는 번호 모음 — 데이터가 바뀔 때만 새로 만듦 (차량이 많아도 빠르게)
   let knownCache = null, knownStamp = "";
@@ -227,7 +231,7 @@
 
     const today = todayStr();
     // 정확히 일치 + "서울12가3456"처럼 지역명이 붙은 번호도 찾기
-    const matches = rows.filter((r) => r.p === q || (q.length >= 7 && r.p.endsWith(q)))
+    const matches = rows.filter((r) => sameCar(r.p, q))
       .sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t));
     const label = `<span class="mini-plate">${esc(pretty(q))}</span>`;
     const now = `<div class="sub">현재 시각 ${nowHHMM()}</div>`;
@@ -447,7 +451,10 @@
   }
   // 찾은 번호판을 정면 직사각형(한국 번호판 비율 약 4.7:1)으로 펴서 돌려줌
   function rectifyPlate(src, sw, sh, quad) {
-    const OW = 600, OH = 128, PAD = 16;
+    // 긴 번호판은 600×128, 짧은·두 줄 번호판(가로:세로 3.3 미만)은 그 비율대로
+    const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+    const ratio = ((dist(quad[0], quad[1]) + dist(quad[3], quad[2])) / 2) / Math.max(1, (dist(quad[0], quad[3]) + dist(quad[1], quad[2])) / 2);
+    const OW = ratio < 3.3 ? 480 : 600, OH = ratio < 3.3 ? Math.round(480 / Math.min(3.3, Math.max(1.5, ratio))) : 128, PAD = 16;
     const h = homography([[0, 0], [OW, 0], [OW, OH], [0, OH]], quad);
     if (!h) return null;
     const sc = src.getContext("2d", { willReadFrequently: true });
@@ -573,8 +580,20 @@
         g2 = grayOf(x2.getImageData(0, 0, W2, H2).data, W2 * H2);
       }
       const f = k / k2;                                   // 960 기준 좌표 → 640 기준 좌표
-      textRowCands(g2, W2, H2).forEach((cd) => cands.push({ text: true, score: cd.score, quad: cd.quad.map(([x, y]) => [(x + 0.5) * f - 0.5, (y + 0.5) * f - 0.5]), box: cd.box.map((v) => v * f) }));
+      let rowsFound = textRowCands(g2, W2, H2);
+      if (!rowsFound.length) {                              // 예전 녹색 번호판(어두운 바탕에 흰 글자)은 밝기를 뒤집어서
+        const inv = new Uint8Array(g2.length); for (let i = 0; i < g2.length; i++) inv[i] = 255 - g2[i];
+        rowsFound = textRowCands(inv, W2, H2);
+      }
+      rowsFound.forEach((cd) => cands.push({ text: true, score: cd.score, quad: cd.quad.map(([x, y]) => [(x + 0.5) * f - 0.5, (y + 0.5) * f - 0.5]), box: cd.box.map((v) => v * f) }));
     }
+    // 흰 바탕 찾기와 글자 줄 찾기가 같은 곳을 가리키면 번호판일 가능성이 높음 → 가산점
+    cands.forEach((a) => {
+      if (cands.some((b) => b !== a && !!b.text !== !!a.text && boxIoU(a.box, b.box) > 0.25)) a.score += 1.5;
+      // 직원은 번호판을 화면 가운데 쪽으로 비추므로, 가장자리 후보는 조금 낮춤
+      const cx = (a.box[0] + a.box[2]) / 2 / W - 0.5, cy = (a.box[1] + a.box[3]) / 2 / H - 0.55;
+      a.score -= Math.min(1.2, Math.hypot(cx, cy) * 1.6);
+    });
     cands.sort((a, b) => b.score - a.score);
     const out = [];
     for (const cd of cands) {
@@ -636,6 +655,7 @@
       }
       comps.push({ x0: minX, x1: maxX, y0: minY, y1: maxY, w, h, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 });
     }
+    if (location.hash === "#debug") window.__comps = comps.map((c) => [Math.round(c.x0), Math.round(c.y0), Math.round(c.w), c.h]);
     if (comps.length < 6) return [];
     comps.sort((a, b) => a.x0 - b.x0);
     // 이웃 잇기: 높이 비슷(±35%), 세로 중심 차이 < 0.35h, 가로 틈 < 1.2h
@@ -647,6 +667,7 @@
         const b = comps[j];
         if (b.x0 > a.x1 + a.h * 1.2) break;
         const hr = b.h / a.h;
+        // 높이가 비슷하거나, 한글 윗조각(ㄹ 등)처럼 짧아도 윗선이 숫자와 맞으면 같은 줄
         if (hr < 0.65 || hr > 1.54) continue;
         if (Math.abs(b.cy - a.cy) > Math.max(a.h, b.h) * 0.35) continue;
         if (b.x0 < a.x1 - a.w * 0.5) continue;                     // 겹치면 같은 글자 조각이 아님
@@ -655,52 +676,115 @@
     }
     const groups = {};
     comps.forEach((c, i) => { const r = find(i); (groups[r] = groups[r] || []).push(c); });
-    const out = [];
-    Object.keys(groups).forEach((k) => {
-      const m = groups[k];
-      if (m.length < 6 || m.length > 11) return;
-      m.sort((a, b) => a.cx - b.cx);
-      const hs = m.map((c) => c.h).sort((a, b) => a - b), hMed = hs[hs.length >> 1];
-      const minX = m[0].x0, maxX = m[m.length - 1].x1;
-      const span = maxX - minX + 1;
-      if (span / hMed < 2.5 || span / hMed > 9 || span > W * 0.7) return;
-      // 그릴 구멍처럼 너비가 똑같은 반복은 제외 (번호판 글자는 1·가 등 너비가 제각각)
-      const ws = m.filter((c) => !c.split).map((c) => c.w);
-      if (ws.length < 3) return;
-      const wMean = ws.reduce((s, v) => s + v, 0) / ws.length;
-      const wCv = Math.sqrt(ws.reduce((s, v) => s + (v - wMean) * (v - wMean), 0) / ws.length) / wMean;
-      if (wCv < 0.12) return;
-      // 윗선·아랫선 (최소제곱 직선)
-      const fit = (pts) => {
-        const k0 = pts.length, sx = pts.reduce((s, p) => s + p[0], 0), sy = pts.reduce((s, p) => s + p[1], 0);
-        const sxx = pts.reduce((s, p) => s + p[0] * p[0], 0), sxy = pts.reduce((s, p) => s + p[0] * p[1], 0);
-        const den = k0 * sxx - sx * sx; const a = den ? (k0 * sxy - sx * sy) / den : 0;
-        return { a, b: (sy - a * sx) / k0 };
-      };
-      const tall = m.filter((c) => c.h >= hMed * 0.85);
-      if (tall.length < 4) return;
-      const top = fit(tall.map((c) => [c.cx, c.y0])), bot = fit(tall.map((c) => [c.cx, c.y1]));
-      if (Math.abs(top.a) > 0.35) return;
-      // 줄 위아래 여백이 밝은지 (번호판 바탕)
-      const yAt = (L, x) => L.a * x + L.b;
-      let ok = 0, tot = 0;
-      for (let x = minX; x <= maxX; x += 2) {
-        const hh = yAt(bot, x) - yAt(top, x);
-        for (const yy of [yAt(top, x) - hh * 0.18, yAt(bot, x) + hh * 0.18]) {
-          const yi = Math.round(yy); if (yi < 0 || yi >= H) continue;
-          tot++; if (!dark[yi * W + x]) ok++;
+    // "105" + "2621"처럼 가운데 한글(로·고 등)이 짧게 잡혀 둘로 끊긴 줄을 다시 이음
+    //  · 두 줄의 글자 높이·윗선·아랫선이 같고 사이가 글자 2.4개 이내일 때만 (그릴 구멍은 줄을 이루지 못해 해당 없음)
+    {
+      const med = (arr) => { const v = arr.slice().sort((a, b) => a - b); return v[v.length >> 1]; };
+      const gl = Object.keys(groups).map((k) => {
+        const m = groups[k];
+        return { k, m, minX: Math.min.apply(null, m.map((c) => c.x0)), maxX: Math.max.apply(null, m.map((c) => c.x1)), y0: med(m.map((c) => c.y0)), y1: med(m.map((c) => c.y1)), h: med(m.map((c) => c.h)) };
+      }).sort((a, b) => a.minX - b.minX);
+      const multi = gl.filter((g0) => g0.m.length >= 2);
+      for (let i = 0; i < multi.length; i++) {
+        const A = multi[i]; if (A.dead) continue;
+        for (let j = 0; j < multi.length; j++) {
+          const B = multi[j]; if (B === A || B.dead || B.minX <= A.maxX) continue;
+          const gap = B.minX - A.maxX, h = Math.max(A.h, B.h);
+          if (gap > h * 2.4 || Math.abs(A.h / B.h - 1) > 0.2 || Math.abs(A.y0 - B.y0) > h * 0.25 || Math.abs(A.y1 - B.y1) > h * 0.25) continue;
+          // 사이에 있는 짧은 조각(한글 윗부분 등)도 함께
+          gl.forEach((S) => {
+            if (S === A || S === B || S.dead || S.m.length !== 1) return;
+            const c = S.m[0];
+            if (c.cx > A.maxX && c.cx < B.minX && Math.abs(c.y0 - A.y0) < h * 0.3 && c.y1 <= A.y1 + h * 0.3) { A.m.push(c); S.dead = true; delete groups[S.k]; }
+          });
+          B.m.forEach((c) => A.m.push(c));
+          A.maxX = B.maxX; B.dead = true; delete groups[B.k];
+          groups[A.k] = A.m;
+          j = -1;                                               // 이어 붙인 뒤 다시 확인
         }
       }
-      if (!tot || ok / tot < 0.8) return;
-      const padX = hMed * 0.45, padY = 0.22;
-      const xl = minX - padX, xr = maxX + padX;
-      const hl = yAt(bot, xl) - yAt(top, xl), hr = yAt(bot, xr) - yAt(top, xr);
-      if (hl <= 2 || hr <= 2) return;
-      const quad = [[xl, yAt(top, xl) - hl * padY], [xr, yAt(top, xr) - hr * padY], [xr, yAt(bot, xr) + hr * padY], [xl, yAt(bot, xl) + hl * padY]];
-      const ys = quad.map((p) => p[1]);
+    }
+    const fit = (pts) => {                                   // 최소제곱 직선 y = a·x + b
+      const k0 = pts.length, sx = pts.reduce((s, p) => s + p[0], 0), sy = pts.reduce((s, p) => s + p[1], 0);
+      const sxx = pts.reduce((s, p) => s + p[0] * p[0], 0), sxy = pts.reduce((s, p) => s + p[0] * p[1], 0);
+      const den = k0 * sxx - sx * sx; const a = den ? (k0 * sxy - sx * sy) / den : 0;
+      return { a, b: (sy - a * sx) / k0 };
+    };
+    const yAt = (L, x) => L.a * x + L.b;
+    // 줄 정보: 글자 수, 가운데 높이, 좌우 끝, 윗선·아랫선, 너비 편차
+    const rows = [];
+    Object.keys(groups).forEach((k) => {
+      const m = groups[k];
+      if (m.length < 3 || m.length > 11) return;
+      m.sort((a, b) => a.cx - b.cx);
+      const hs = m.map((c) => c.h).sort((a, b) => a - b), hMed = hs[hs.length >> 1];
+      const minX = m[0].x0, maxX = m[m.length - 1].x1, span = maxX - minX + 1;
+      const tall = m.filter((c) => c.h >= hMed * 0.85);
+      if (tall.length < 2) return;
+      const top = fit(tall.map((c) => [c.cx, c.y0])), bot = fit(tall.map((c) => [c.cx, c.y1]));
+      if (Math.abs(top.a) > 0.35) return;
+      const ws = m.filter((c) => !c.split).map((c) => c.w);
+      const wMean = ws.length ? ws.reduce((s, v) => s + v, 0) / ws.length : 0;
+      const wCv = ws.length >= 3 ? Math.sqrt(ws.reduce((s, v) => s + (v - wMean) * (v - wMean), 0) / ws.length) / wMean : 0;
+      const cx = (minX + maxX) / 2;
+      rows.push({ m, n: m.length, hMed, minX, maxX, span, top, bot, wCv, nws: ws.length, cx, yTop: yAt(top, cx), yBot: yAt(bot, cx) });
+    });
+    if (location.hash === "#debug") window.__rows = rows.map((r) => ({ n: r.n, h: +r.hMed.toFixed(1), x: [Math.round(r.minX), Math.round(r.maxX)], yT: Math.round(r.yTop), yB: Math.round(r.yBot), cv: +r.wCv.toFixed(2) }));
+    const out = [];
+    const push = (quad, score) => {
+      const ys = quad.map((p) => p[1]), xs = quad.map((p) => p[0]);
+      const xl = Math.min.apply(null, xs), xr = Math.max.apply(null, xs);
       if (xl < -W * 0.02 || xr > W * 1.02 || Math.min.apply(null, ys) < -H * 0.02 || Math.max.apply(null, ys) > H * 1.02) return;
-      const score = 11 + Math.min(m.length, 9) * 0.25 + Math.min(wCv, 0.5);
       out.push({ score, quad, box: [xl, Math.min.apply(null, ys), xr, Math.max.apply(null, ys)] });
+    };
+    // 줄 위아래(또는 위만·아래만) 여백이 밝은지 (번호판 바탕)
+    const marginOk = (r, above, below, off, need) => {
+      let ok = 0, tot = 0;
+      for (let x = r.minX; x <= r.maxX; x += 2) {
+        const hh = yAt(r.bot, x) - yAt(r.top, x), ys = [];
+        if (above) ys.push(yAt(r.top, x) - hh * (off || 0.18));
+        if (below) ys.push(yAt(r.bot, x) + hh * (off || 0.18));
+        for (const yy of ys) { const yi = Math.round(yy); if (yi < 0 || yi >= H) continue; tot++; if (!dark[yi * W + x]) ok++; }
+      }
+      return tot > 0 && ok / tot >= (need || 0.8);
+    };
+    // 2) 예전 두 줄 번호판: 작은 윗줄("서울 12") 바로 아래에 큰 아랫줄("가 3456")
+    rows.forEach((bt) => {
+      if (bt.n < 4 || bt.n > 8 || bt.hMed < 9 || bt.span / bt.hMed < 1.8 || bt.span / bt.hMed > 5.5 || bt.span > W * 0.6) return;
+      rows.forEach((tp) => {
+        if (tp === bt || tp.n < 2 || tp.n > 8) return;
+        const hr = tp.hMed / bt.hMed;
+        if (hr < 0.35 || hr > 0.9) return;
+        const gap = bt.yTop - tp.yBot;
+        if (gap < -bt.hMed * 0.1 || gap > bt.hMed * 0.75) return;
+        if (Math.abs(tp.cx - bt.cx) > bt.span * 0.2 || tp.span < bt.span * 0.35 || tp.span > bt.span * 0.9) return;   // 윗줄은 가운데, 아랫줄보다 짧게
+        if (!marginOk(bt, false, true, 0.1, 0.6) || !marginOk(tp, true, false, 0.1, 0.6)) return;   // 예전 번호판은 테두리선이 글자에 가까움
+        const padX = bt.hMed * 0.35;
+        const xl = Math.min(bt.minX, tp.minX) - padX, xr = Math.max(bt.maxX, tp.maxX) + padX;
+        // 윗줄 글자가 테두리에 붙어 일부만 잡혀도 윗줄이 다 들어오게: 아랫줄 글자 높이의 0.95배 위까지
+        const lift = Math.max(bt.yTop - tp.yTop + tp.hMed * 0.3, bt.hMed * 0.95);
+        const upL = yAt(bt.top, xl) - lift, upR = yAt(bt.top, xr) - lift;
+        const dnL = yAt(bt.bot, xl) + bt.hMed * 0.18, dnR = yAt(bt.bot, xr) + bt.hMed * 0.18;
+        const pr = (xr - xl) / Math.max(1, (dnL + dnR) / 2 - (upL + upR) / 2);
+        if (pr < 1.5 || pr > 2.8) return;                         // 예전 번호판 비율(335×170 ≈ 2:1)
+        push([[xl, upL], [xr, upR], [xr, dnR], [xl, dnL]], 12.4 + Math.min(bt.n + tp.n, 12) * 0.05);
+        bt.paired = true;
+      });
+    });
+    // 1) 한 줄 번호판 (긴 번호판·짧은 흰 번호판): 글자 6~11개
+    rows.forEach((r) => {
+      if (r.paired) return;                                      // 두 줄 번호판의 아랫줄이면 위에서 처리함
+      if (r.hMed < 9) return;                                     // 너무 작은 글자(먼 간판 등)는 제외
+      if (r.n < 6 || r.span / r.hMed < 2.5 || r.span / r.hMed > 9 || r.span > W * 0.7) return;
+      if (r.nws < 3 || r.wCv < 0.12) return;                      // 그릴 구멍처럼 똑같은 반복은 제외
+      if (r.m.filter((c) => c.h >= r.hMed * 0.85).length < 4) return;
+      if (!marginOk(r, true, true)) return;
+      const padX = r.hMed * 0.45, padY = 0.22;
+      const xl = r.minX - padX, xr = r.maxX + padX;
+      const hl = yAt(r.bot, xl) - yAt(r.top, xl), hr = yAt(r.bot, xr) - yAt(r.top, xr);
+      if (hl <= 2 || hr <= 2) return;
+      push([[xl, yAt(r.top, xl) - hl * padY], [xr, yAt(r.top, xr) - hr * padY], [xr, yAt(r.bot, xr) + hr * padY], [xl, yAt(r.bot, xl) + hl * padY]],
+        11 + Math.min(r.n, 9) * 0.25 + Math.min(r.wCv, 0.5));
     });
     return out;
   }
@@ -731,7 +815,12 @@
     const d = x.getImageData(0, 0, c.width, c.height), p = d.data, n = c.width * c.height;
     const thr = otsu(grayOf(p, n)), W = c.width, H = c.height;
     const dark = new Uint8Array(n);
-    for (let i = 0, j = 0; i < n; i++, j += 4) dark[i] = p[j] <= thr ? 1 : 0;
+    let nd = 0;
+    for (let i = 0, j = 0; i < n; i++, j += 4) { dark[i] = p[j] <= thr ? 1 : 0; nd += dark[i]; }
+    // 가운데 영역이 대부분 어두우면 흰 글자 번호판(예전 녹색) → 뒤집어서 "흰 바탕에 검은 글자"로
+    let midDark = 0, midN = 0;
+    for (let y = Math.round(H * 0.2); y < H * 0.8; y++) for (let x = Math.round(W * 0.1); x < W * 0.9; x++) { midDark += dark[y * W + x]; midN++; }
+    if (midN && midDark / midN > 0.5) for (let i = 0; i < n; i++) dark[i] = dark[i] ? 0 : 1;
     // 가장자리에 닿은 검은 덩어리 중 글자처럼 생기지 않은 것(테두리선·나사·배경)은 지움
     const seen = new Uint8Array(n), st = [];
     for (let i = 0; i < n; i++) {
@@ -749,7 +838,7 @@
         if (y < H - 1 && dark[q + W] && !seen[q + W]) { seen[q + W] = 1; st.push(q + W); }
       }
       const cw = maxX - minX + 1, ch = maxY - minY + 1;
-      const charLike = ch > H * 0.45 && cw < W * 0.2;          // 가장자리에 걸친 글자는 남김
+      const charLike = ch > H * 0.45 && ch < H * 0.85 && cw < W * 0.2;   // 가장자리에 걸친 글자는 남김 (높이 85% 넘는 세로선은 테두리)
       if (!charLike) for (const q of comp) dark[q] = 0;
     }
     // 양 끝 5% 안에만 있는 가는 세로선(번호판 테두리·나사)은 "1"로 읽히지 않게 지움
@@ -767,10 +856,14 @@
         if (y < H - 1 && dark[q + W] && !seen[q + W]) { seen[q + W] = 1; st.push(q + W); }
       }
       if ((maxX < W * 0.05 || minX > W * 0.95) && maxX - minX < W * 0.03) for (const q of comp) dark[q] = 0;
+      else if (maxX - minX < W * 0.04 && comp.length > 0) {      // 번호판 높이 거의 전체를 차지하는 가는 세로선(테두리)도 지움
+        let y0 = H, y1 = 0; for (const q of comp) { const y = (q / W) | 0; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (y1 - y0 > H * 0.85) for (const q of comp) dark[q] = 0;
+      }
     }
     for (let i = 0, j = 0; i < n; i++, j += 4) { const v = dark[i] ? 0 : 255; p[j] = p[j + 1] = p[j + 2] = v; }
     x.putImageData(d, 0, 0);
-    return c;
+    return cleanLines(c);
   }
   function halfSize(flat) {
     const c = document.createElement("canvas"); c.width = Math.round(flat.width / 2); c.height = Math.round(flat.height / 2);
@@ -780,8 +873,73 @@
   // 편 번호판 읽기
   //  · 실시간(빠르게): 흑백 → 안 되면 원본
   //  · 사진(꼼꼼히): 흑백·원본·절반 크기 세 번 읽어 다수결, 모두 실패하면 덩어리 읽기(예전 2단 번호판 대비)
+  // 흑백 이미지에서 글자가 될 수 없는 선 지우기 (번호판 테두리·바깥 배경 조각)
+  //  · 가로로 60% 넘게 이어진 선  · 높이 85% 넘게 이어진 가는 세로선  · 양 끝 6% 안의 가는 조각
+  function cleanLines(c) {
+    const W = c.width, H = c.height, x = c.getContext("2d", { willReadFrequently: true });
+    const d = x.getImageData(0, 0, W, H), p = d.data, n = W * H;
+    const dark = new Uint8Array(n), seen = new Uint8Array(n), st = [];
+    for (let i = 0; i < n; i++) dark[i] = p[i * 4] < 128 ? 1 : 0;
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      if (!dark[i] || seen[i]) continue;
+      const comp = []; seen[i] = 1; st.push(i);
+      let minX = W, maxX = 0, minY = H, maxY = 0;
+      while (st.length) {
+        const q = st.pop(), qx = q % W, qy = (q / W) | 0; comp.push(q);
+        if (qx < minX) minX = qx; if (qx > maxX) maxX = qx; if (qy < minY) minY = qy; if (qy > maxY) maxY = qy;
+        if (qx > 0 && dark[q - 1] && !seen[q - 1]) { seen[q - 1] = 1; st.push(q - 1); }
+        if (qx < W - 1 && dark[q + 1] && !seen[q + 1]) { seen[q + 1] = 1; st.push(q + 1); }
+        if (qy > 0 && dark[q - W] && !seen[q - W]) { seen[q - W] = 1; st.push(q - W); }
+        if (qy < H - 1 && dark[q + W] && !seen[q + W]) { seen[q + W] = 1; st.push(q + W); }
+      }
+      const cw = maxX - minX + 1, ch = maxY - minY + 1;
+      const wide = cw > W * 0.6, tallThin = ch > H * 0.85 && cw < W * 0.08, sideBit = (maxX < W * 0.06 || minX > W * 0.94) && cw < W * 0.06;
+      if (wide || tallThin || sideBit) { for (const q of comp) { const j = q * 4; p[j] = p[j + 1] = p[j + 2] = 255; } changed = true; }
+    }
+    if (changed) x.putImageData(d, 0, 0);
+    return c;
+  }
+  // 두 줄 번호판: 줄 사이 빈 줄을 찾아 윗줄·아랫줄로 나눔 (못 찾으면 null)
+  function splitLines(bin) {
+    const W = bin.width, H = bin.height, d = bin.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    const rowDark = new Array(H).fill(0);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4] < 128) rowDark[y]++;
+    const max = Math.max.apply(null, rowDark);
+    if (!max) return null;
+    let best = -1, bestV = Infinity;
+    for (let y = Math.round(H * 0.25); y < H * 0.62; y++) if (rowDark[y] < bestV) { bestV = rowDark[y]; best = y; }
+    if (best < 0 || bestV > max * 0.12) return null;
+    // 위아래 둘 다 글자가 있어야 두 줄
+    const sum = (a, b) => rowDark.slice(a, b).reduce((s, v) => s + v, 0);
+    if (sum(0, best) < max * 2 || sum(best, H) < max * 2) return null;
+    const cut = (y0, y1) => {
+      const c = document.createElement("canvas"), pad = 10; c.width = W + pad * 2; c.height = y1 - y0 + pad * 2;
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(bin, 0, y0, W, y1 - y0, pad, pad, W, y1 - y0);
+      return c;
+    };
+    return [cleanLines(cut(0, best)), cleanLines(cut(best, H))];
+  }
+  // 짧은·두 줄 번호판 읽기: 두 줄이면 줄마다 읽어 이어 붙이고, 아니면 한 줄·덩어리로
+  async function readTall(w, bin, flat) {
+    // 짧은 흰 번호판(한 줄)은 통째로 읽으면 되고, 두 줄 번호판은 통째로는 안 읽히므로 줄을 나눠서
+    const one = extractPlate(await recognizeAs(w, bin, "7"));
+    if (one) return one;
+    const parts = splitLines(bin);
+    if (parts) {
+      const t = (await recognizeAs(w, parts[0], "7")) + (await recognizeAs(w, parts[1], "7"));
+      const p = extractPlate(t.replace(/\s+/g, ""));
+      if (p) return p;
+    }
+    return extractPlate(await recognizeAs(w, bin, "6")) || extractPlate(await recognizeAs(w, flat, "6"));
+  }
   async function readFlat(w, flat, thorough) {
     const bin = binarized(flat);
+    if (flat.width / flat.height < 3.6) {                    // 짧은 흰 번호판·예전 두 줄 번호판
+      const p = await readTall(w, bin, flat);
+      return thorough ? (p ? { plate: p, weak: false, agree: 2 } : null) : p;
+    }
     if (!thorough) {
       return extractPlate(await recognizeAs(w, bin, "7")) || extractPlate(await recognizeAs(w, flat, "7"));
     }
@@ -1004,6 +1162,10 @@
     mark.hidden = false;
     if (flat) {
       zc.width = flat.width; zc.height = flat.height;
+      // 긴 번호판은 넓게, 짧은·두 줄 번호판은 그 비율대로
+      const tallPlate = flat.width / flat.height < 3.6;
+      zc.style.aspectRatio = `${flat.width} / ${flat.height}`;
+      zc.style.width = tallPlate ? "min(40%, 240px)" : "";
       zc.getContext("2d").drawImage(flat, 0, 0);
       zc.classList.toggle("read", !!read);
       zc.hidden = false;
@@ -1093,7 +1255,7 @@
   }
 
   // 개발·점검용 (주소 끝에 #debug 를 붙였을 때만)
-  if (location.hash === "#debug") window.__plate = { toOcrCanvas, VARIANTS, getWorker, extractPlate, plateCanvas, recognizeAs, findPlateCands, rectifyFrom, readFlat, textRowCands, grayOf };
+  if (location.hash === "#debug") window.__plate = { toOcrCanvas, VARIANTS, getWorker, extractPlate, plateCanvas, recognizeAs, findPlateCands, rectifyFrom, readFlat, textRowCands, grayOf, binarized, splitLines };
 
   $("startCam").addEventListener("click", startCamera);
   $("stopCam").addEventListener("click", stopCamera);

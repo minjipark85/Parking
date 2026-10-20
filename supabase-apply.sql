@@ -103,6 +103,7 @@ returns json
 language plpgsql security definer set search_path = public as $$
 declare
   v_key    text := upper(regexp_replace(coalesce(p_plate, ''), '[[:space:]·.-]', '', 'g'));
+  v_core   text := regexp_replace(upper(regexp_replace(coalesce(p_plate, ''), '[[:space:]·.-]', '', 'g')), '^[가-힣]{2}', '');
   v_phone  text := regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g');
   v_name   text := btrim(coalesce(p_name, ''));
   v_now    timestamp := now() at time zone 'Asia/Seoul';
@@ -143,13 +144,18 @@ begin
     end if;
   end if;
 
+  -- 같은 차량은 같은 날짜에 한 번만 (시간대·연락처가 달라도)
+  --  · "서울12가3456"처럼 지역명이 붙은 번호도 같은 차량으로 봄
+  --  · 같은 차량·날짜 신청을 한 줄로 세워, 동시에 두 건을 넣어도 하나만 통과
+  perform pg_advisory_xact_lock(hashtext('plate-day:' || v_core || ':' || p_date::text));
+  if exists (select 1 from reservations
+              where reserve_date = p_date
+                and regexp_replace(plate_key, '^[가-힣]{2}', '') = v_core) then
+    return json_build_object('ok', false, 'error', 'dup_day');
+  end if;
+
   -- 같은 날짜·시간대 신청을 한 줄로 세워서 정원 초과를 막음
   perform pg_advisory_xact_lock(hashtext('apply:' || p_date::text || ':' || p_slot::text));
-
-  if exists (select 1 from reservations
-              where reserve_date = p_date and reserve_time = p_slot and plate_key = v_key) then
-    return json_build_object('ok', false, 'error', 'duplicate');
-  end if;
 
   v_cap := slot_cap(p_date, p_slot);
   select count(*) into v_booked from reservations where reserve_date = p_date and reserve_time = p_slot;

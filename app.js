@@ -484,11 +484,163 @@
     b.getContext("2d", { willReadFrequently: true }).drawImage(src, c0.x, c0.y, c0.w, c0.h, 0, 0, bw, bh);
     return b;
   }
-  // 번호판을 찾아 펴기 — 못 찾으면 null
+  // 번호판을 찾아 펴기 — 못 찾으면 null (예전 방식, 점검용)
   function plateCanvas(src, sw, sh, crop) {
-    const b = baseCanvas(src, sw, sh, crop, 1100);
-    const quad = findPlateQuad(b, b.width, b.height);
-    return quad ? rectifyPlate(b, b.width, b.height, quad) : null;
+    const cd = findPlateCands(src, sw, sh, crop, 1)[0];
+    return cd ? rectifyFrom(src, sw, sh, cd.quad) : null;
+  }
+
+  // =========================================================
+  //  멀리서 찍어도: 화면 전체에서 번호판 후보 찾기
+  //  · 밝기 기준을 여러 개로 바꿔 가며 "밝은 가로 사각형"을 모으고
+  //  · 사각형 가운데를 가로로 훑어 글자 줄무늬(밝음↔어두움 반복)가 있는 것만 번호판 후보로
+  //  · 화면의 0.06%만 차지하는 작은 번호판도 찾음 (예전에는 3% 이상만)
+  //  · 결과 좌표는 원본(영상·사진) 기준 → 원본 해상도에서 확대해 읽음
+  // =========================================================
+  const boxIoU = (a, b) => {
+    const ix = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])), iy = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+    const i = ix * iy, u = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - i;
+    return u > 0 ? i / u : 0;
+  };
+  function findPlateCands(src, sw, sh, crop, maxN) {
+    const c0 = crop || { x: 0, y: 0, w: sw, h: sh };
+    const W = Math.max(16, Math.min(640, Math.round(c0.w))), k = W / c0.w, H = Math.max(8, Math.round(c0.h * k));
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const cx = c.getContext("2d", { willReadFrequently: true });
+    cx.drawImage(src, c0.x, c0.y, c0.w, c0.h, 0, 0, W, H);
+    const n = W * H, g = grayOf(cx.getImageData(0, 0, W, H).data, n);
+    const o = Math.max(50, otsu(g));
+    const thrs = [o, Math.max(o, 90), 150, 185, 215].filter((t, i, a) => a.indexOf(t) === i && t < 245);
+    const label = new Int32Array(n), stack = [], cands = [];
+    let id = 0;
+    for (const thr of thrs) {
+      label.fill(0);
+      for (let i = 0; i < n; i++) {
+        if (g[i] <= thr || label[i]) continue;
+        id++; label[i] = id; stack.push(i);
+        let area = 0, minX = W, maxX = 0, minY = H, maxY = 0, edge = false;
+        let tl = null, tr = null, br = null, bl = null, sMin = 1e9, sMax = -1e9, dMin = 1e9, dMax = -1e9;
+        while (stack.length) {
+          const q = stack.pop(), x = q % W, y = (q / W) | 0;
+          area++;
+          if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+          if (x === 0 || y === 0 || x === W - 1 || y === H - 1) edge = true;
+          const sm = x + y, df = x - y;
+          if (sm < sMin) { sMin = sm; tl = [x, y]; } if (sm > sMax) { sMax = sm; br = [x, y]; }
+          if (df > dMax) { dMax = df; tr = [x, y]; } if (df < dMin) { dMin = df; bl = [x, y]; }
+          if (x > 0 && g[q - 1] > thr && !label[q - 1]) { label[q - 1] = id; stack.push(q - 1); }
+          if (x < W - 1 && g[q + 1] > thr && !label[q + 1]) { label[q + 1] = id; stack.push(q + 1); }
+          if (y > 0 && g[q - W] > thr && !label[q - W]) { label[q - W] = id; stack.push(q - W); }
+          if (y < H - 1 && g[q + W] > thr && !label[q + W]) { label[q + W] = id; stack.push(q + W); }
+        }
+        const bw = maxX - minX + 1, bh = maxY - minY + 1, ratio = bw / bh;
+        if (area < n * 0.0006 || bh < 5 || bw < 18 || ratio < 1.6 || ratio > 8 || area > n * 0.5) continue;
+        const quadArea = Math.abs((tl[0] * tr[1] - tr[0] * tl[1]) + (tr[0] * br[1] - br[0] * tr[1]) + (br[0] * bl[1] - bl[0] * br[1]) + (bl[0] * tl[1] - tl[0] * bl[1])) / 2;
+        const fill = area / Math.max(1, quadArea);
+        if (fill < 0.45 || fill > 1.3) continue;
+        // 글자 줄무늬: 높이 35~65% 사이 몇 줄에서 "번호판 바탕 → 글자" 바뀌는 횟수
+        // + 바탕과 글자의 밝기 차이(바닥 얼룩 같은 흐린 무늬는 제외)
+        let stripes = 0, sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+        for (const fy of [0.38, 0.46, 0.54, 0.62]) {
+          const y = Math.min(maxY, Math.round(minY + bh * fy)), row = y * W;
+          let first = -1, last = -1;
+          for (let x = minX; x <= maxX; x++) if (label[row + x] === id) { if (first < 0) first = x; last = x; }
+          if (first < 0) continue;
+          let t = 0, prev = true;
+          for (let x = first; x <= last; x++) {
+            const on = label[row + x] === id;
+            if (on) { sOn += g[row + x]; nOn++; } else { sOff += g[row + x]; nOff++; }
+            if (prev && !on) t++; prev = on;
+          }
+          if (t > stripes) stripes = t;
+        }
+        if (stripes < 4 || stripes > 40 || !nOff) continue;
+        const contrast = sOn / Math.max(1, nOn) - sOff / nOff;
+        if (contrast < 45) continue;
+        const ratioFit = 1 - Math.min(1, Math.abs(Math.log(ratio / 4.4)) / 1.2);   // 한국 번호판 비율 4.4~4.7 (예전 2단 번호판 2:1도 허용)
+        const score = (Math.log(area) * 0.6 + Math.min(stripes, 10) * 0.35 + ratioFit * 2 + (1 - Math.abs(1 - fill)) * 1.5) * (edge ? 0.4 : 1);
+        cands.push({ score, quad: [tl, tr, br, bl], box: [minX, minY, maxX + 1, maxY + 1] });
+      }
+    }
+    cands.sort((a, b) => b.score - a.score);
+    const out = [];
+    for (const cd of cands) {
+      if (out.some((x) => boxIoU(x.box, cd.box) > 0.3)) continue;
+      out.push(cd);
+      if (out.length >= (maxN || 3)) break;
+    }
+    return out.map((cd) => ({ score: cd.score, quad: cd.quad.map(([x, y]) => [c0.x + (x + 0.5) / k, c0.y + (y + 0.5) / k]) }));
+  }
+  // 후보 부분만 원본 해상도에서 잘라 확대한 뒤 정면으로 펴기
+  function rectifyFrom(src, sw, sh, quad0) {
+    // 번호판 흰 바탕 가장자리에 붙은 검은 테두리가 글자와 붙지 않게, 가로 3%·세로 12%씩 넉넉히
+    const qcx = (quad0[0][0] + quad0[1][0] + quad0[2][0] + quad0[3][0]) / 4, qcy = (quad0[0][1] + quad0[1][1] + quad0[2][1] + quad0[3][1]) / 4;
+    const quad = quad0.map(([x, y]) => [qcx + (x - qcx) * 1.03, qcy + (y - qcy) * 1.12]);
+    const xs = quad.map((p) => p[0]), ys = quad.map((p) => p[1]);
+    const qx0 = Math.min.apply(null, xs), qx1 = Math.max.apply(null, xs), qy0 = Math.min.apply(null, ys), qy1 = Math.max.apply(null, ys);
+    const m = Math.max(3, (qy1 - qy0) * 0.12);
+    const x0 = Math.max(0, Math.floor(qx0 - m)), y0 = Math.max(0, Math.floor(qy0 - m));
+    const x1 = Math.min(sw, Math.ceil(qx1 + m)), y1 = Math.min(sh, Math.ceil(qy1 + m));
+    if (x1 - x0 < 4 || y1 - y0 < 4) return null;
+    const s = Math.min(5, Math.max(1, 640 / Math.max(1, qx1 - qx0)));
+    const rw = Math.round((x1 - x0) * s), rh = Math.round((y1 - y0) * s);
+    const r = document.createElement("canvas"); r.width = rw; r.height = rh;
+    const rx = r.getContext("2d", { willReadFrequently: true });
+    rx.imageSmoothingEnabled = true; rx.imageSmoothingQuality = "high";
+    rx.drawImage(src, x0, y0, x1 - x0, y1 - y0, 0, 0, rw, rh);
+    return rectifyPlate(r, rw, rh, quad.map(([x, y]) => [(x - x0) * s, (y - y0) * s]));
+  }
+  // 편 번호판을 흑백 두 색으로 또렷하게 (로↔모 같은 한글 혼동이 줄어듦)
+  function binarized(flat) {
+    const c = document.createElement("canvas"); c.width = flat.width; c.height = flat.height;
+    const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(flat, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height), p = d.data, n = c.width * c.height;
+    const thr = otsu(grayOf(p, n)), W = c.width, H = c.height;
+    const dark = new Uint8Array(n);
+    for (let i = 0, j = 0; i < n; i++, j += 4) dark[i] = p[j] <= thr ? 1 : 0;
+    // 가장자리에 닿은 검은 덩어리 중 글자처럼 생기지 않은 것(테두리선·나사·배경)은 지움
+    const seen = new Uint8Array(n), st = [];
+    for (let i = 0; i < n; i++) {
+      if (!dark[i] || seen[i]) continue;
+      const x0 = i % W, y0 = (i / W) | 0;
+      if (x0 !== 0 && y0 !== 0 && x0 !== W - 1 && y0 !== H - 1) continue;
+      const comp = []; seen[i] = 1; st.push(i);
+      let minX = W, maxX = 0, minY = H, maxY = 0;
+      while (st.length) {
+        const q = st.pop(), x = q % W, y = (q / W) | 0; comp.push(q);
+        if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (x > 0 && dark[q - 1] && !seen[q - 1]) { seen[q - 1] = 1; st.push(q - 1); }
+        if (x < W - 1 && dark[q + 1] && !seen[q + 1]) { seen[q + 1] = 1; st.push(q + 1); }
+        if (y > 0 && dark[q - W] && !seen[q - W]) { seen[q - W] = 1; st.push(q - W); }
+        if (y < H - 1 && dark[q + W] && !seen[q + W]) { seen[q + W] = 1; st.push(q + W); }
+      }
+      const cw = maxX - minX + 1, ch = maxY - minY + 1;
+      const charLike = ch > H * 0.45 && cw < W * 0.2;          // 가장자리에 걸친 글자는 남김
+      if (!charLike) for (const q of comp) dark[q] = 0;
+    }
+    for (let i = 0, j = 0; i < n; i++, j += 4) { const v = dark[i] ? 0 : 255; p[j] = p[j + 1] = p[j + 2] = v; }
+    x.putImageData(d, 0, 0);
+    return c;
+  }
+  function halfSize(flat) {
+    const c = document.createElement("canvas"); c.width = Math.round(flat.width / 2); c.height = Math.round(flat.height / 2);
+    const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(flat, 0, 0, c.width, c.height);
+    return c;
+  }
+  // 편 번호판 읽기
+  //  · 실시간(빠르게): 흑백 → 안 되면 원본
+  //  · 사진(꼼꼼히): 흑백·원본·절반 크기 세 번 읽어 다수결, 모두 실패하면 덩어리 읽기(예전 2단 번호판 대비)
+  async function readFlat(w, flat, thorough) {
+    const bin = binarized(flat);
+    if (!thorough) {
+      return extractPlate(await recognizeAs(w, bin, "7")) || extractPlate(await recognizeAs(w, flat, "7"));
+    }
+    const reads = [];
+    for (const c of [bin, flat, halfSize(flat)]) { const p = extractPlate(await recognizeAs(w, c, "7")); if (p) reads.push(p); }
+    if (!reads.length) { const p = extractPlate(await recognizeAs(w, flat, "6")); return p ? { plate: p, weak: true } : null; }
+    const cnt = {}; reads.forEach((p) => { cnt[p] = (cnt[p] || 0) + 1; });
+    const best = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || reads.indexOf(a) - reads.indexOf(b))[0];
+    return { plate: best, weak: false, agree: cnt[best] };
   }
 
   // 인식 방식 설정(번호판을 편 이미지는 한 줄 읽기, 그 외는 덩어리 읽기)
@@ -566,7 +718,8 @@
       return;
     }
     try {
-      const base = { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } };
+      // 멀리 있는 번호판도 읽히도록 가능한 한 높은 해상도로 (기기가 안 되면 알아서 낮춤)
+      const base = { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } };
       try { stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign({ zoom: true }, base), audio: false }); }
       catch (e1) { if (e1 && e1.name === "NotAllowedError") throw e1; stream = await navigator.mediaDevices.getUserMedia({ video: base, audio: false }); }
     } catch (err) {
@@ -605,6 +758,7 @@
 
   function stopCamera() {
     clearInterval(timer); timer = null;
+    try { $("plateMark").hidden = true; $("plateZoom").hidden = true; } catch (e) {}
     if (stream) stream.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
@@ -682,6 +836,29 @@
   $("zoomIn").addEventListener("click", () => applyZoom(zoom * 1.25));
   $("zoomOut").addEventListener("click", () => applyZoom(zoom / 1.25));
 
+  // 찾은 번호판: 화면에 초록 테두리 + 위쪽에 크게 확대해서 보여 줌
+  let foundHideTimer = null;
+  function showFound(boxQuad, flat, read) {
+    const mark = $("plateMark"), zc = $("plateZoom");
+    if (!boxQuad) {
+      if (!foundHideTimer) foundHideTimer = setTimeout(() => { mark.hidden = true; zc.hidden = true; foundHideTimer = null; }, 1500);
+      return;
+    }
+    clearTimeout(foundHideTimer); foundHideTimer = null;
+    const xs = boxQuad.map((p) => p[0]), ys = boxQuad.map((p) => p[1]);
+    const x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys);
+    mark.style.left = `${x0 - 4}px`; mark.style.top = `${y0 - 4}px`;
+    mark.style.width = `${Math.max.apply(null, xs) - x0 + 8}px`; mark.style.height = `${Math.max.apply(null, ys) - y0 + 8}px`;
+    mark.classList.toggle("read", !!read);
+    mark.hidden = false;
+    if (flat) {
+      zc.width = flat.width; zc.height = flat.height;
+      zc.getContext("2d").drawImage(flat, 0, 0);
+      zc.classList.toggle("read", !!read);
+      zc.hidden = false;
+    }
+  }
+
   async function scanFrame() {
     if (busy || !stream || video.readyState < 2 || document.hidden) return;
     busy = true;
@@ -698,6 +875,11 @@
       const toVid = (x, y) => [((bw / 2 + (x - bw / 2) / dz) + ox) / scale, ((bh / 2 + (y - bh / 2) / dz) + oy) / scale];
       const p0 = toVid(bw * 0.1, bh * 0.35), p1 = toVid(bw * 0.9, bh * 0.65);
       const crop = { x: p0[0], y: p0[1], w: p1[0] - p0[0], h: p1[1] - p0[1] };
+      // 번호판 찾기는 화면에 보이는 네모 전체(가로 92%, 세로 84%)에서
+      const f0 = toVid(bw * 0.04, bh * 0.08), f1 = toVid(bw * 0.96, bh * 0.92);
+      const fx0 = Math.max(0, f0[0]), fy0 = Math.max(0, f0[1]), fx1 = Math.min(vw, f1[0]), fy1 = Math.min(vh, f1[1]);
+      const fullCrop = { x: fx0, y: fy0, w: fx1 - fx0, h: fy1 - fy0 };
+      const toBox = (x, y) => [((x * scale - ox) - bw / 2) * dz + bw / 2, ((y * scale - oy) - bh / 2) * dz + bh / 2];
       // 보정 방법 고르기: 짝수 번째는 최근에 성공한 방법, 홀수 번째는 다른 방법을 차례로
       frameNo++;
       let vi;
@@ -705,11 +887,21 @@
       else { tryIdx = (tryIdx + 1) % VARIANTS.length; if (tryIdx === bestVariant) tryIdx = (tryIdx + 1) % VARIANTS.length; vi = tryIdx; }
       const w = await getWorker();
       let plate = null;
-      // 1순위: 번호판을 찾아 정면으로 편 이미지 (짝수 프레임)
-      const flat = frameNo % 2 === 0 ? plateCanvas(video, vw, vh, crop) : null;
-      if (flat) { plate = extractPlate(await recognizeAs(w, flat, "7")); usedFlat = !!plate; }
-      // 2순위: 번호판을 못 찾았거나 못 읽었으면 보정 방법을 돌려가며
-      if (!plate) {
+      // 1순위: 화면 전체에서 번호판을 찾아 확대·정면 보정해 읽기 (후보가 둘이면 번갈아)
+      const cands = fullCrop.w > 8 && fullCrop.h > 8 ? findPlateCands(video, vw, vh, fullCrop, 2) : [];
+      if (cands.length) {
+        const second = frameNo % 2 === 1 && cands.length > 1;
+        const cd = cands[second ? 1 : 0];
+        const flat = rectifyFrom(video, vw, vh, cd.quad);
+        if (flat) {
+          plate = await readFlat(w, flat);
+          usedFlat = !!plate;
+          // 화면 표시는 1순위 후보이거나 실제로 읽힌 경우만 (바닥 선 같은 보조 후보로 깜빡이지 않게)
+          if (!second || plate) showFound(cd.quad.map((p) => toBox(p[0], p[1])), flat, !!plate);
+        }
+      } else showFound(null);
+      // 2순위: 번호판을 못 찾았거나 못 읽었으면 가운데 띠를 보정 방법을 돌려가며 (홀수 프레임)
+      if (!plate && (!cands.length || frameNo % 2 === 1)) {
         plate = extractPlate(await recognizeAs(w, toOcrCanvas(video, vw, vh, crop, VARIANTS[vi]), "6"));
         if (plate) { bestVariant = vi; missStreak = 0; usedFlat = false; } else if (++missStreak > 2 * VARIANTS.length) { bestVariant = 0; missStreak = 0; }
       }
@@ -731,11 +923,11 @@
         }
       } else if (!plate) {
         $("camBox").classList.remove("found");
-        setStatus(`번호판을 네모 안에 맞춰 주세요${speedText()}`);
+        setStatus(`번호판이 네모 안에 보이게 비춰 주세요 · 멀리서도 돼요${speedText()}`);
         // 차량이 지나가고 15초 동안 번호판이 안 보이면 다음 차량을 위해 대기 상태로
         if ($("result").dataset.s !== "idle" && Date.now() - resultAt > 15000 && document.activeElement !== $("plateInput")) {
           lastShown = ""; lastQuery = "";
-          showIdle("다음 차량의 번호판을 네모 안에 맞춰 주세요.");
+          showIdle("다음 차량의 번호판이 네모 안에 보이게 비춰 주세요.");
         }
       }
     } catch (err) {
@@ -746,7 +938,7 @@
   }
 
   // 개발·점검용 (주소 끝에 #debug 를 붙였을 때만)
-  if (location.hash === "#debug") window.__plate = { toOcrCanvas, VARIANTS, getWorker, extractPlate, plateCanvas, recognizeAs };
+  if (location.hash === "#debug") window.__plate = { toOcrCanvas, VARIANTS, getWorker, extractPlate, plateCanvas, recognizeAs, findPlateCands, rectifyFrom, readFlat };
 
   $("startCam").addEventListener("click", startCamera);
   $("stopCam").addEventListener("click", stopCamera);
@@ -765,14 +957,25 @@
       // 사진은 모든 보정 방법으로 읽어 보고 가장 많이 나온 번호를 고름
       const w = await getWorker();
       const votes = {};
-      const flat = plateCanvas(img, img.width, img.height, null);
-      if (flat) { const p = extractPlate(await recognizeAs(w, flat, "7")); if (p) votes[p] = 2.5; }   // 원근 보정 결과에 가장 큰 가중치
-      for (let i = 0; i < VARIANTS.length; i++) {
+      // 1) 사진 전체에서 번호판 후보(최대 3개)를 찾아 확대·정면 보정해 읽기
+      const cands = findPlateCands(img, img.width, img.height, null, 3);
+      for (let i = 0; i < cands.length; i++) {
+        $("camLabel").textContent = `번호판 확대해서 읽는 중… ${i + 1}/${cands.length}`;
+        const flat = rectifyFrom(img, img.width, img.height, cands[i].quad);
+        if (!flat) continue;
+        const r = await readFlat(w, flat, true);
+        if (r) votes[r.plate] = (votes[r.plate] || 0) + (knownPlates().has(r.plate) ? 5 : 0) + (r.weak ? 0.5 : 1 + r.agree) - i * 0.3;
+      }
+      // 2) 번호판을 못 찾았거나 못 읽었으면 예전 방식(사진 전체를 여러 보정으로)
+      const candHit = Object.keys(votes).length > 0;
+      for (let i = 0; i < VARIANTS.length && !candHit; i++) {
         $("camLabel").textContent = `읽는 중… ${i + 1}/${VARIANTS.length}`;
         const p = extractPlate(await recognizeAs(w, toOcrCanvas(img, img.width, img.height, null, VARIANTS[i]), "6"));
         if (p) votes[p] = (votes[p] || 0) + (i === 0 ? 1.1 : 1);
       }
-      const plate = Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0] || null;
+      let plate = Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0] || null;
+      // 번호판 위치를 못 찾고 예전 방식으로만 읽은 번호는 두 가지 이상 보정에서 같게 나와야 인정 (지어낸 번호 방지)
+      if (plate && !candHit && votes[plate] < 2 && !knownPlates().has(plate)) plate = null;
       if (plate) {
         $("plateInput").value = pretty(plate);
         check();

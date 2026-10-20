@@ -15,9 +15,9 @@ create table if not exists public.regular_vehicles (
 
 alter table public.regular_vehicles enable row level security;
 
--- 확인 페이지는 조회만 합니다. 등록·수정·삭제는 Supabase 대시보드(Table Editor)에서 하세요.
+-- 등록·수정·삭제는 Supabase 대시보드(Table Editor)에서 하세요.
+-- 읽기 권한은 supabase-staff.sql 에서 "로그인한 직원"에게만 줍니다. (누구나 읽기는 열지 않음 — 다시 실행해도 안전)
 drop policy if exists "read regular vehicles" on public.regular_vehicles;
-create policy "read regular vehicles" on public.regular_vehicles for select using (true);
 
 -- 예시 데이터 (원하지 않으면 지우고 실행하세요)
 insert into public.regular_vehicles (plate, plate_key, memo, valid_until) values

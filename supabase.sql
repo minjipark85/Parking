@@ -20,9 +20,9 @@ create index if not exists reservations_date_idx on public.reservations (reserve
 -- 행 단위 보안(RLS) 켜기
 alter table public.reservations enable row level security;
 
--- 확인 페이지는 조회만 합니다. (등록·수정·삭제 정책이 없으므로 페이지에서는 바꿀 수 없음)
--- 예약 등록은 Supabase 대시보드(Table Editor)나 별도 관리 시스템에서 합니다.
-create policy "read reservations" on public.reservations for select using (true);
+-- 읽기 권한은 supabase-staff.sql 에서 "로그인한 직원"에게만 줍니다. (여기서는 누구나 읽기를 열지 않음)
+-- 예전 버전으로 만든 "누구나 읽기" 정책이 남아 있으면 지움 — 이 파일을 다시 실행해도 안전
+drop policy if exists "read reservations" on public.reservations;
 
 -- 예시 데이터 (원하지 않으면 지우고 실행하세요)
 insert into public.reservations (reserve_date, reserve_time, plate, plate_key) values
@@ -46,7 +46,7 @@ create table if not exists public.regular_vehicles (
 );
 
 alter table public.regular_vehicles enable row level security;
-create policy "read regular vehicles" on public.regular_vehicles for select using (true);
+drop policy if exists "read regular vehicles" on public.regular_vehicles;   -- 읽기는 supabase-staff.sql 에서 직원에게만
 
 insert into public.regular_vehicles (plate, plate_key, memo, valid_until) values
   ('11가 1111', '11가1111', '관리사무소', null),

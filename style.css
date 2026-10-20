@@ -273,3 +273,29 @@ button.small, .btn.small { min-height: 44px; font-size: 14px; padding: 0 14px; }
 .chip.reg { color: var(--reg); background: var(--reg-soft); }
 .reg-memo { font-family: var(--body); font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seg button { padding: 0 12px; }
+
+/* ---------- 직원 로그인 ---------- */
+body.locked .grid, body.locked .top-right .net, body.locked #fsBtn { display: none !important; }
+.login { display: grid; place-items: center; padding-block: 6vh; }
+.login-card { width: min(420px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 26px 22px; display: grid; gap: 14px; }
+.login-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 28px; letter-spacing: 0; color: var(--ink); }
+.login-card .muted { margin: 0; color: var(--muted); font-size: 14px; }
+.login-card .small { font-size: 13px; }
+.login-field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.login-field input { min-height: 52px; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; background: var(--bg); color: var(--ink); font-size: 17px; }
+.login-field input:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+.login-error { margin: 0; color: var(--bad); font-size: 14px; font-weight: 600; }
+.login-error:empty { display: none; }
+.account { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.account span { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#logoutBtn.arm { color: var(--bad); border-color: var(--bad); }
+@media (max-width: 520px) { .account span { display: none; } }
+
+/* ---------- 카메라 줌 ---------- */
+.cam.live { touch-action: none; }                       /* 카메라가 켜져 있을 때는 두 손가락 동작을 줌으로 사용 */
+.cam video { transform-origin: 50% 50%; }
+.zoom-ctl { position: absolute; top: 10px; left: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 2px; background: rgba(0, 0, 0, .6); border: 1px solid rgba(255, 255, 255, .3); border-radius: 12px; padding: 2px; color: #ffffff; }
+.zoom-ctl button { min-height: 40px; min-width: 40px; padding: 0; border: 0; background: transparent; color: #ffffff; font-size: 22px; font-weight: 600; border-radius: 10px; }
+.zoom-ctl button:active { background: rgba(255, 255, 255, .15); }
+.zoom-ctl span { min-width: 48px; text-align: center; font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.zoom-hint { position: absolute; top: 58px; left: 10px; z-index: 3; background: rgba(0, 0, 0, .6); color: #ffffff; font-size: 13px; padding: 4px 10px; border-radius: 99px; pointer-events: none; }

@@ -88,11 +88,14 @@
   const REG_TABLE = "regular_vehicles";
 
   let syncing = false, lastSyncError = false, lastQuery = "";
+  let unlocked = false;                // 직원 로그인 전에는 예약을 보여주지 않음
   async function sync() {
-    if (!sb || syncing) return;
+    if (!sb || syncing || !unlocked) return;
     if (!navigator.onLine) { renderNet(); return; }
     syncing = true; renderNet();
     try {
+      // 직원 명단에서 빠졌거나 로그아웃된 계정이면 바로 잠금 (인터넷 오류면 아래 catch로)
+      if (!(await checkStaff())) { syncing = false; await signOutAll("직원 명단에 없는 계정이라 로그아웃했어요. 관리자에게 문의하세요."); return; }
       const from = new Date(); from.setDate(from.getDate() - 1);   // 어제부터 앞으로의 예약만 저장
       const rows = [];
       for (let page = 0; page < 20; page++) {                       // 최대 20,000건
@@ -166,6 +169,7 @@
 
   // ---------- 조회 (신호등) — 기기에 저장된 예약으로 즉시 판정 ----------
   function check(silent) {
+    if (!unlocked) return;
     const q = norm($("plateInput").value);
     if (!q) {
       lastQuery = "";
@@ -535,7 +539,9 @@
       return;
     }
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      const base = { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } };
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign({ zoom: true }, base), audio: false }); }
+      catch (e1) { if (e1 && e1.name === "NotAllowedError") throw e1; stream = await navigator.mediaDevices.getUserMedia({ video: base, audio: false }); }
     } catch (err) {
       console.error(err);
       showResult("bad", `<div class="verdict"><span class="dot"></span>카메라를 켜지 못했어요</div><div class="sub">브라우저의 카메라 권한을 허용한 뒤 다시 눌러 주세요.</div>`);
@@ -566,6 +572,7 @@
     if (!stream) return;
     setStatus("번호판을 네모 안에 맞춰 주세요");
     showIdle("번호판을 네모 안에 맞추면 바로 예약 여부가 표시됩니다.");
+    setupZoom();
     timer = setInterval(scanFrame, 500);
   }
 
@@ -578,10 +585,75 @@
     $("camIdle").style.display = "";
     $("camStatus").hidden = true;
     $("stopCam").hidden = true;
-    $("camBox").classList.remove("found");
+    $("camBox").classList.remove("found", "live");
     $("camBox").dataset.s = "idle";
+    $("zoomCtl").hidden = true; $("zoomHint").hidden = true;
+    video.style.transform = ""; pinchPts.clear(); pinch = null; zoomTrack = null;
     releaseAwake();
   }
+
+  // =========================================================
+  //  카메라 줌 — 두 손가락으로 벌리면 확대, 오므리면 축소 (− / + 버튼, 마우스 휠도 가능)
+  //  · 카메라가 줌을 지원하면(대부분 안드로이드 Chrome) 카메라 자체 줌 → 화질 그대로 확대
+  //  · 지원하지 않으면(아이패드 등) 화면 확대(디지털 줌)
+  //  · 어느 쪽이든 화면의 네모 안에 보이는 부분을 그대로 읽음
+  // =========================================================
+  const ZOOM_KEY = "plate-zoom-v1";
+  let zoom = 1, zoomMin = 1, zoomMax = 4, hwZoom = false, zoomTrack = null, zoomRaf = 0;
+  const pinchPts = new Map(); let pinch = null;
+
+  function setupZoom() {
+    zoomTrack = stream && stream.getVideoTracks()[0];
+    let caps = {};
+    try { caps = (zoomTrack && zoomTrack.getCapabilities) ? zoomTrack.getCapabilities() : {}; } catch (e) {}
+    if (caps.zoom && caps.zoom.max > caps.zoom.min) { hwZoom = true; zoomMin = caps.zoom.min; zoomMax = Math.min(caps.zoom.max, 10); }
+    else { hwZoom = false; zoomMin = 1; zoomMax = 4; }
+    let saved = 1; try { saved = parseFloat(localStorage.getItem(ZOOM_KEY)) || 1; } catch (e) {}
+    $("camBox").classList.add("live");
+    $("zoomCtl").hidden = false;
+    let hinted = false; try { hinted = !!localStorage.getItem(ZOOM_KEY + "-hint"); } catch (e) {}
+    if (!hinted) { $("zoomHint").hidden = false; setTimeout(() => { $("zoomHint").hidden = true; }, 5000); try { localStorage.setItem(ZOOM_KEY + "-hint", "1"); } catch (e) {} }
+    applyZoom(saved);
+  }
+  function applyZoom(z) {
+    zoom = Math.min(zoomMax, Math.max(zoomMin, z));
+    $("zoomLabel").textContent = zoom.toFixed(1) + "×";
+    if (hwZoom && zoomTrack) {
+      video.style.transform = "";
+      if (!zoomRaf) zoomRaf = requestAnimationFrame(() => {     // 손가락 움직임마다 보내지 않고 한 프레임에 한 번만
+        zoomRaf = 0;
+        zoomTrack.applyConstraints({ advanced: [{ zoom: zoom }] }).catch(() => {});
+      });
+    } else {
+      video.style.transform = zoom > 1.001 ? "scale(" + zoom.toFixed(3) + ")" : "";
+    }
+    recent = [];                                                 // 확대 비율이 바뀌면 이전 인식 결과는 버림
+    try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (e) {}
+  }
+  const camEl = $("camBox");
+  const dist = () => { const p = Array.from(pinchPts.values()); return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
+  camEl.addEventListener("pointerdown", (e) => {
+    if (!stream || e.target.closest("button")) return;
+    pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchPts.size === 2) { pinch = { d: dist(), z: zoom }; $("zoomHint").hidden = true; }
+  });
+  camEl.addEventListener("pointermove", (e) => {
+    if (!pinchPts.has(e.pointerId)) return;
+    pinchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pinchPts.size === 2 && pinch.d > 10) { e.preventDefault(); applyZoom(pinch.z * dist() / pinch.d); }
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((t) => camEl.addEventListener(t, (e) => {
+    pinchPts.delete(e.pointerId);
+    if (pinchPts.size < 2) pinch = null;
+  }));
+  camEl.addEventListener("wheel", (e) => {                       // PC: 마우스 휠·트랙패드
+    if (!stream) return;
+    e.preventDefault();
+    applyZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+  }, { passive: false });
+  camEl.addEventListener("dblclick", () => { if (stream) applyZoom(1); });   // 두 번 탭하면 원래 크기
+  $("zoomIn").addEventListener("click", () => applyZoom(zoom * 1.25));
+  $("zoomOut").addEventListener("click", () => applyZoom(zoom / 1.25));
 
   async function scanFrame() {
     if (busy || !stream || video.readyState < 2 || document.hidden) return;
@@ -594,7 +666,11 @@
       const bw = box.clientWidth, bh = box.clientHeight;
       const scale = Math.max(bw / vw, bh / vh);
       const ox = (vw * scale - bw) / 2, oy = (vh * scale - bh) / 2;
-      const crop = { x: (bw * 0.1 + ox) / scale, y: (bh * 0.35 + oy) / scale, w: (bw * 0.8) / scale, h: (bh * 0.3) / scale };
+      // 디지털 줌(화면 확대) 중이면, 화면 가운데를 기준으로 확대된 만큼 원본에서 더 좁은 영역을 읽음
+      const dz = hwZoom ? 1 : zoom;
+      const toVid = (x, y) => [((bw / 2 + (x - bw / 2) / dz) + ox) / scale, ((bh / 2 + (y - bh / 2) / dz) + oy) / scale];
+      const p0 = toVid(bw * 0.1, bh * 0.35), p1 = toVid(bw * 0.9, bh * 0.65);
+      const crop = { x: p0[0], y: p0[1], w: p1[0] - p0[0], h: p1[1] - p0[1] };
       // 보정 방법 고르기: 짝수 번째는 최근에 성공한 방법, 홀수 번째는 다른 방법을 차례로
       frameNo++;
       let vi;
@@ -775,6 +851,7 @@
 
   function renderLedger() {
     const box = $("ledger");
+    if (!unlocked) { box.innerHTML = ""; return; }
     const today = todayStr();
     const f = norm($("filter").value);
     if (view === "reg") {
@@ -829,12 +906,117 @@
   $("vReg").addEventListener("click", () => setView("reg"));
   $("filter").addEventListener("input", renderLedger);
 
+  // =========================================================
+  //  직원 로그인
+  //  · 계정은 관리자가 Supabase에서 만들고, 직원 명단(staff_emails)에 올린 사람만 통과
+  //  · 한 번 로그인한 기기는 인터넷이 끊겨도 저장된 예약으로 계속 사용
+  //  · 로그아웃하면 기기에 저장된 예약도 지움
+  // =========================================================
+  const AUTH_KEY = "plate-staff-v1";            // { email, at } — 마지막으로 직원 확인된 계정
+  const readAuth = () => { try { return JSON.parse(localStorage.getItem(AUTH_KEY)); } catch (e) { return null; } };
+  const writeAuth = (v) => { try { v ? localStorage.setItem(AUTH_KEY, JSON.stringify(v)) : localStorage.removeItem(AUTH_KEY); } catch (e) {} };
+
+  async function checkStaff() {
+    const { data, error } = await sb.rpc("is_staff");
+    if (error) throw error;
+    return data === true;
+  }
+  function wipeLocal() {
+    store.db = []; store.regDb = []; store.file = []; store.regFile = [];
+    store.syncedAt = 0; store.fileName = ""; store.fileAt = 0;
+    saveStore();
+  }
+  function lock(message) {
+    unlocked = false;
+    try { stopCamera(); } catch (e) {}
+    document.body.classList.add("locked");
+    $("loginView").hidden = false;
+    $("account").hidden = true;
+    $("accountEmail").textContent = "";
+    $("loginError").textContent = message || "";
+    $("plateInput").value = ""; lastQuery = "";
+    renderLedger();
+    setTimeout(() => $("lEmail").focus(), 50);
+  }
+  function unlock(email, offline) {
+    unlocked = true;
+    document.body.classList.remove("locked");
+    $("loginView").hidden = true;
+    $("account").hidden = !email;
+    $("accountEmail").textContent = email ? email + (offline ? " · 오프라인" : "") : "";
+    renderFileInfo(); renderLedger(); renderNet();
+    showIdle("카메라를 켜거나 번호를 입력하면 여기에 예약 여부가 표시됩니다.");
+    sync();
+  }
+  async function signOutAll(message) {
+    try { await sb.auth.signOut({ scope: "local" }); } catch (e) {}
+    writeAuth(null); wipeLocal();
+    lock(message);
+  }
+
+  async function initAuth() {
+    if (!sb) {                               // DB 없이(CSV만) 쓰는 경우는 로그인 없음
+      if (!store.file.length) $("fileBox").open = true;
+      unlock("", false);
+      return;
+    }
+    const saved = readAuth();
+    let session = null, netErr = false;
+    try {
+      const r = await sb.auth.getSession();
+      session = r.data && r.data.session;
+      if (r.error) netErr = true;
+    } catch (e) { netErr = true; }
+
+    if (session) {
+      try {
+        if (await checkStaff()) { writeAuth({ email: session.user.email, at: Date.now() }); unlock(session.user.email, false); }
+        else await signOutAll("직원 명단에 없는 계정이에요. 관리자에게 등록을 요청하세요.");
+      } catch (e) {                          // 인터넷이 안 되면 마지막 확인 기록으로 계속 사용
+        if (saved) unlock(saved.email, true); else lock("인터넷에 연결된 상태에서 로그인해 주세요.");
+      }
+      return;
+    }
+    if (saved && (netErr || !navigator.onLine)) { unlock(saved.email, true); return; }
+    if (saved) { writeAuth(null); wipeLocal(); }   // 로그인이 풀린 기기 → 저장 예약도 지움
+    lock();
+  }
+
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("lEmail").value.trim(), password = $("lPass").value;
+    const err = $("loginError"), btn = $("loginBtn");
+    if (!email || !password) { err.textContent = "이메일과 비밀번호를 입력하세요."; return; }
+    if (!navigator.onLine) { err.textContent = "인터넷에 연결된 상태에서 로그인해 주세요."; return; }
+    btn.disabled = true; btn.textContent = "확인 중…"; err.textContent = "";
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) {
+        err.textContent = /invalid/i.test(error.message || "") ? "이메일 또는 비밀번호가 맞지 않아요." : "로그인하지 못했어요. 잠시 후 다시 시도하세요.";
+        return;
+      }
+      if (!(await checkStaff())) { await signOutAll("직원 명단에 없는 계정이에요. 관리자에게 등록을 요청하세요."); return; }
+      writeAuth({ email: data.user.email, at: Date.now() });
+      $("lPass").value = "";
+      unlock(data.user.email, false);
+    } catch (ex) {
+      console.error(ex); err.textContent = "로그인하지 못했어요. 인터넷 연결을 확인하세요.";
+    } finally { btn.disabled = false; btn.textContent = "로그인"; }
+  });
+
+  $("logoutBtn").addEventListener("click", async () => {
+    const b = $("logoutBtn");
+    if (!b.classList.contains("arm")) {      // 한 번 더 눌러야 로그아웃 (실수 방지)
+      b.classList.add("arm"); b.textContent = "정말 로그아웃";
+      setTimeout(() => { b.classList.remove("arm"); b.textContent = "로그아웃"; }, 4000);
+      return;
+    }
+    b.classList.remove("arm"); b.textContent = "로그아웃";
+    await signOutAll("로그아웃했어요. 기기에 저장된 예약도 지웠어요.");
+  });
+
   // ---------- 시작 ----------
-  if (!sb && !store.file.length) $("fileBox").open = true;   // DB 없이 처음 쓰면 파일 칸을 펼쳐 둠
-  renderFileInfo();
-  renderLedger();
-  renderNet();
-  sync();
+  initAuth();
   setInterval(sync, 60000);           // 온라인이면 1분마다 예약을 새로 받아 저장
 
   // 오프라인에서도 열리도록 앱 파일을 기기에 저장 (서비스 워커)

@@ -57,6 +57,16 @@ language sql stable security definer set search_path = public as $$
    order by o.open_date;
 $$;
 
+-- 4-1) 신청 페이지용: 공개 예정인 날짜와 공개 시각 (흐리게 "10/21(수) 14시 오픈"으로 보여 줌)
+create or replace function public.apply_upcoming_dates()
+returns table (open_date date, opens_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select o.open_date, o.opens_at from open_dates o
+   where o.open_date >= (now() at time zone 'Asia/Seoul')::date
+     and o.opens_at > now()
+   order by o.open_date;
+$$;
+
 -- 5) 관리자용: 기간 안의 모든 날짜 상태 (열림·공개 예정·예약 건수·시간대별 정원)
 drop function if exists public.admin_list_dates(date, date);   -- 결과 칸이 늘어서 새로 만듦
 create function public.admin_list_dates(p_from date, p_to date)
@@ -136,6 +146,8 @@ revoke all on function public.admin_list_dates(date, date) from public;
 revoke all on function public.admin_open_dates(date[], timestamptz) from public;
 revoke all on function public.admin_close_dates(date[]) from public;
 grant execute on function public.apply_open_dates() to anon, authenticated;
+revoke all on function public.apply_upcoming_dates() from public;
+grant execute on function public.apply_upcoming_dates() to anon, authenticated;
 grant execute on function public.apply_date_allowed(date) to anon, authenticated;
 grant execute on function public.admin_list_dates(date, date) to authenticated;
 grant execute on function public.admin_open_dates(date[], timestamptz) to authenticated;

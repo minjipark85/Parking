@@ -75,11 +75,20 @@
   var dateOpen = function (v) { return OPEN_LIST.indexOf(v) >= 0; };
   var selDate = "", selSlot = "", avail = {};
 
+  // 공개 예정 날짜 { date: "2026-10-24", at: Date } — 공개 시각이 되면 자동으로 다시 불러옴
+  var SCHED = [], openTimer = null;
   function loadDates() {
     if (!sb) { renderDates(); return Promise.resolve(); }
-    return sb.rpc("apply_open_dates").then(function (res) {
+    var upcoming = sb.rpc("apply_upcoming_dates").then(function (r) { return r.error ? [] : (r.data || []); }, function () { return []; });
+    return Promise.all([sb.rpc("apply_open_dates"), upcoming]).then(function (both) {
+      var res = both[0];
       if (res.error) throw res.error;
       OPEN_LIST = (res.data || []).map(function (r) { return String(r && typeof r === "object" ? r.open_date : r).slice(0, 10); });
+      SCHED = both[1].map(function (r) { return { date: String(r.open_date).slice(0, 10), at: new Date(String(r.opens_at).replace(/(\.\d{3})\d+/, "$1")) }; })
+        .filter(function (x) { return !isNaN(x.at) && OPEN_LIST.indexOf(x.date) < 0; });
+      clearTimeout(openTimer);
+      var next = SCHED.reduce(function (m, x) { return !m || x.at < m ? x.at : m; }, null);
+      if (next) openTimer = setTimeout(loadDates, Math.min(2147483000, Math.max(1000, next - new Date() + 1500)));
       datesLoaded = true;
       if (!dateOpen(selDate)) { selDate = OPEN_LIST[0] || ""; selSlot = ""; }
       renderDates();
@@ -89,28 +98,42 @@
       $("dateStrip").innerHTML = '<p class="muted">예약 가능한 날짜를 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.</p>';
     });
   }
+  // 공개 시각 "10/21(수) 14시 오픈" (한국 시간 기준)
+  function openLabel(at) {
+    var k = new Date(at.getTime() + 9 * 3600 * 1000);
+    var dd = new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate()));
+    return { day: (k.getUTCMonth() + 1) + "/" + k.getUTCDate() + "(" + DOW[dd.getUTCDay()] + ")", time: k.getUTCHours() + "시" + (k.getUTCMinutes() ? " " + k.getUTCMinutes() + "분" : "") };
+  }
   function renderDates() {
     var html = "", t = ymd(today), t1 = new Date(today); t1.setDate(t1.getDate() + 1); t1 = ymd(t1);
-    OPEN_LIST.forEach(function (v) {
-      var d = parseD(v), cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "";
-      html += '<button type="button" class="date-chip' + cls + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '">' +
+    var items = OPEN_LIST.map(function (v) { return { date: v }; }).concat(SCHED).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    items.forEach(function (it) {
+      var v = it.date, d = parseD(v), cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "", lb = it.at ? openLabel(it.at) : null;
+      html += '<div class="date-col"><button type="button" class="date-chip' + cls + (lb ? " sched" : "") + '" role="radio" data-date="' + v + '" aria-checked="' + (!lb && v === selDate) + '"' +
+        (lb ? ' aria-disabled="true" data-open="' + lb.day + " " + lb.time + '" aria-label="' + (d.getMonth() + 1) + "월 " + d.getDate() + "일, " + lb.day + " " + lb.time + ' 오픈 예정"' : "") + '>' +
         '<span class="dw">' + (v === t ? "오늘" : v === t1 ? "내일" : DOW[d.getDay()]) + '</span>' +
-        '<span class="dd">' + d.getDate() + '</span><span class="dl">' + (d.getMonth() + 1) + '월</span></button>';
+        '<span class="dd">' + d.getDate() + '</span><span class="dl">' + (d.getMonth() + 1) + '월</span></button>' +
+        (lb ? '<span class="date-open" aria-hidden="true">' + lb.day + "<br>" + lb.time + " 오픈</span>" : "") + '</div>';
     });
     $("dateStrip").innerHTML = html;
-    var none = datesLoaded && !OPEN_LIST.length;      // 열린 날짜가 하나도 없으면 안내만 보여 줌
-    $("applyForm").hidden = none;
-    $("closedNote").hidden = !none;
+    var none = datesLoaded && !OPEN_LIST.length;
+    // 열린 날짜가 없어도 공개 예정 날짜가 있으면 날짜 칸만 보여 줌
+    $("applyForm").hidden = none && !SCHED.length;
+    $("applyForm").classList.toggle("dates-only", none && SCHED.length > 0);
+    $("closedNote").hidden = !(none && !SCHED.length);
+    $("dateNote").textContent = none && SCHED.length ? "아직 신청할 수 있는 날짜가 없어요. 흐린 날짜는 아래 표시된 시각에 열려요." : "";
     updateSummary();
   }
   $("dateStrip").addEventListener("click", function (e) {
     var b = e.target.closest(".date-chip"); if (!b || b.disabled) return;
+    if (b.classList.contains("sched")) { $("dateNote").textContent = b.dataset.open + "에 열려요. 그때부터 이 날짜를 신청할 수 있어요."; return; }
     pickDate(b.dataset.date);
   });
   function pickDate(v) {
     if (!dateOpen(v)) { setError(ERR.bad_date); return; }
     selDate = v; selSlot = "";
-    Array.prototype.forEach.call(document.querySelectorAll(".date-chip"), function (c) { c.setAttribute("aria-checked", String(c.dataset.date === v)); });
+    Array.prototype.forEach.call(document.querySelectorAll(".date-chip"), function (c) { c.setAttribute("aria-checked", String(c.dataset.date === v && !c.classList.contains("sched"))); });
+    if (OPEN_LIST.length) $("dateNote").textContent = "";
     setError(""); loadSlots();
   }
 

@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="apply.css?v=4">
+  <link rel="stylesheet" href="apply.css?v=5">
 </head>
 <body>
 <div class="page">
@@ -103,8 +103,9 @@
         <div><dt>시간대</dt><dd id="dSlot"></dd></div>
         <div><dt>차량번호</dt><dd><span class="mini-plate" id="dPlate"></span></dd></div>
       </dl>
-      <p class="ticket-foot">예약한 시간대에 오시면 번호판 확인 후 바로 들어오실 수 있어요. 이 화면을 캡처해 두면 편해요.</p>
+      <p class="ticket-foot">예약한 시간대에 오시면 번호판 확인 후 바로 들어오실 수 있어요. 번호판 인식이 어려울 때는 <b>실시간 예약확인증</b>을 보여 주세요.</p>
     </section>
+    <button type="button" class="primary pass-go" id="passBtn">실시간 예약확인증 열기</button>
     <div class="row-buttons">
       <button type="button" class="primary" id="againBtn">다른 예약 신청</button>
       <button type="button" id="toMineBtn">내 예약 확인·취소</button>
@@ -134,6 +135,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="apply.js?v=4"></script>
+<script src="apply.js?v=5"></script>
 </body>
 </html>

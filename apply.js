@@ -55,6 +55,12 @@
   $("tabApply").addEventListener("click", function () { show("apply"); loadSlots(); });
   $("tabMine").addEventListener("click", function () { show("mine"); });
   $("againBtn").addEventListener("click", function () { show("apply"); loadDates(); });
+  // 실시간 예약확인증 — 차량번호·연락처를 이 휴대폰에 저장하고 확인증 페이지로
+  function openPass(plate, phone) {
+    try { localStorage.setItem("plate-pass-v1", JSON.stringify({ plate: norm(plate), phone: digits(phone) })); } catch (e) {}
+    location.href = "pass.html";
+  }
+  $("passBtn").addEventListener("click", function () { if (lastDone.plate) openPass(lastDone.plate, lastDone.phone); });
   $("toMineBtn").addEventListener("click", function () {
     $("mPlate").value = lastDone.plate || ""; $("mPhone").value = lastDone.phone || "";
     show("mine"); if (lastDone.plate) loadMine();
@@ -228,7 +234,7 @@
       if (!res.data.length) { $("mineList").innerHTML = '<p class="muted">앞으로 예정된 예약이 없어요. 차량번호와 연락처가 신청할 때와 같은지 확인해 주세요.</p>'; return; }
       $("mineList").innerHTML = res.data.map(function (r) {
         return '<div class="my-item" data-id="' + esc(r.id) + '"><span class="when">' + dateLabel(String(r.reserve_date)) + ' · ' + slotLabel(r.reserve_time) + '</span>' +
-          '<button type="button" class="cancel">취소</button>' +
+          '<span class="acts"><button type="button" class="to-pass">확인증</button><button type="button" class="cancel">취소</button></span>' +
           '<span class="meta"><span class="mini-plate" style="font-size:15px">' + esc(r.plate) + '</span> · 예약번호 <span class="mono">' + esc(r.code) + '</span></span></div>';
       }).join("");
     }).catch(function (e) { console.error(e); $("mineError").textContent = "조회하지 못했어요. 잠시 후 다시 시도해 주세요."; })
@@ -236,6 +242,7 @@
   }
   $("mineForm").addEventListener("submit", function (e) { e.preventDefault(); loadMine(); });
   $("mineList").addEventListener("click", function (e) {
+    if (e.target.closest(".to-pass")) { openPass($("mPlate").value, $("mPhone").value); return; }
     var b = e.target.closest(".cancel"); if (!b) return;
     if (!b.classList.contains("arm")) {          // 한 번 더 눌러야 취소 (실수 방지)
       b.classList.add("arm"); b.textContent = "정말 취소";

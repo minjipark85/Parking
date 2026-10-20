@@ -29,6 +29,7 @@
     @media (min-width: 560px) { .menu { grid-template-columns: 1fr 1fr; } }
     .menu a { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; min-height: 84px; padding: 16px 18px; border-radius: 16px; text-decoration: none; color: inherit; border: 1px solid var(--line); background: var(--surface); }
     .menu a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    @media (min-width: 560px) { .menu a.go { grid-column: 1 / -1; } }
     .menu a.go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
     .menu .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
     .menu a.go .ic { background: rgba(255, 255, 255, .18); color: inherit; }
@@ -77,6 +78,11 @@
     <a class="go" href="apply.html">
       <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M8.5 15l2.5 2.5 4.5-5"/></svg></span>
       <span><b>예약 신청 / 확인</b><span class="sub">날짜·시간대 선택, 내 예약 조회·취소</span></span>
+      <span class="arr" aria-hidden="true">›</span>
+    </a>
+    <a href="pass.html">
+      <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="10" r="3"/><path d="M9 16.5h6"/></svg></span>
+      <span><b>실시간 예약확인증</b><span class="sub">인식이 어려울 때 출입구에서 제시</span></span>
       <span class="arr" aria-hidden="true">›</span>
     </a>
     <a href="http://203.253.68.223/prepaydef/doViewPaymentSchCar/w7jr+ABnTaqZTyXS6M+lZkHpiDXPSNMlyNWOzWxVe57B+BYL1L3oDJ21NwJ7zEuEWkH5nnFZp5ZYwIPDDzPXhA==" target="_blank" rel="noopener">

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>예약확인증 | 명수당 방문 차량 예약</title>
+  <meta name="theme-color" content="#1d4fb0" id="themeColor">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="apply.css?v=4">
+  <link rel="stylesheet" href="pass.css?v=1">
+</head>
+<body class="pass-body" data-s="idle">
+<div class="page pass-page">
+  <header class="top">
+    <a class="brand" href="./" title="안내 페이지로">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>예약확인증</span>
+    </a>
+  </header>
+
+  <div class="notice" id="setupNotice" hidden></div>
+
+  <!-- 차량번호 입력 -->
+  <main id="formView" hidden>
+    <form class="step" id="passForm" novalidate>
+      <h2>실시간 예약확인증 열기</h2>
+      <p class="muted">출입구에서 번호판 인식이 어려울 때 이 화면을 보여 주세요. 화면 색이 지금 출입 가능 여부를 나타내요.</p>
+      <label class="field">차량번호<input id="pPlate" autocomplete="off" placeholder="12가 3456"></label>
+      <label class="field">연락처 <span class="opt">(예약할 때 쓴 번호 · 정기 차량은 비워도 돼요)</span>
+        <input id="pPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" maxlength="13"></label>
+      <p class="form-error" id="formError" role="alert"></p>
+      <button type="submit" class="primary" id="openBtn">확인증 열기</button>
+      <p class="muted small">입력한 번호는 이 휴대폰에만 저장돼 다음에 바로 열려요.</p>
+    </form>
+  </main>
+
+  <!-- 확인증 -->
+  <main id="passView" hidden>
+    <section class="pass" id="pass" aria-live="polite">
+      <div class="pass-head">
+        <span class="pass-org">한국외대 글로벌캠퍼스 · 명수당 방문 차량</span>
+        <span class="pass-kind">예약확인증</span>
+      </div>
+      <div class="pass-verdict"><span class="dot" aria-hidden="true"></span><span id="vText">확인 중…</span></div>
+      <div class="pass-clock" aria-label="현재 시각"><span id="clockDate"></span><b id="clock">--:--:--</b></div>
+      <div class="pass-card">
+        <div class="shine" aria-hidden="true"></div>
+        <div class="big-plate" id="vPlate"></div>
+        <dl class="pass-info" id="vInfo"></dl>
+        <p class="pass-sub" id="vSub"></p>
+      </div>
+      <p class="pass-stale" id="stale" hidden></p>
+    </section>
+    <p class="pass-foot" id="lastAt"></p>
+    <div class="row-buttons">
+      <button type="button" id="refreshBtn">새로고침</button>
+      <button type="button" id="changeBtn">다른 차량</button>
+    </div>
+    <p class="muted small center">캡처한 화면은 인정되지 않아요. 시계가 움직이는 이 화면을 그대로 보여 주세요.</p>
+  </main>
+</div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="pass.js?v=1"></script>
+</body>
+</html>

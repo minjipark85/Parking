@@ -79,6 +79,17 @@
   const regActive = (r, day) => (!r.from || r.from <= day) && (!r.until || r.until >= day);
   const regMatch = (r, q) => r.p === q || (q.length >= 7 && r.p.endsWith(q));
   const activeRegs = () => { const t = todayStr(); return allRegs().filter((r) => regActive(r, t)); };
+  // 인식 결과를 DB 번호와 맞춰 볼 때 쓰는 번호 모음 — 데이터가 바뀔 때만 새로 만듦 (차량이 많아도 빠르게)
+  let knownCache = null, knownStamp = "";
+  function knownPlates() {
+    const stamp = [store.syncedAt, store.fileAt, store.db.length, store.file.length, store.regDb.length, store.regFile.length].join(":");
+    if (!knownCache || stamp !== knownStamp) {
+      knownCache = new Set(allRows().map((r) => r.p).concat(allRegs().map((r) => r.p)));
+      knownStamp = stamp;
+    }
+    return knownCache;
+  }
+  const LIST_MAX = 300;                // 현황 목록은 한 번에 이만큼만 그림 (태블릿이 느려지지 않게)
 
   // ---------- DB 연결 (Supabase, 선택) ----------
   const cfg = window.APP_CONFIG || {};
@@ -110,9 +121,25 @@
       }
       store.db = rows;
       // 정기 차량 목록 (표가 아직 없으면 건너뜀)
-      const reg = await sb.from(REG_TABLE).select("plate_key,memo,valid_from,valid_until").limit(5000);
-      if (reg.error) console.warn("정기 차량 표를 읽지 못했어요:", reg.error.message);
-      else store.regDb = reg.data.map((r) => ({ p: norm(r.plate_key), memo: r.memo || "", from: r.valid_from || "", until: r.valid_until || "", src: "db" }));
+      // Supabase는 한 번에 최대 1,000줄만 주므로 1,000줄씩 나눠서 끝까지 받음 (최대 100,000대)
+      const regs = []; let regErr = null;
+      for (let page = 0; page < 100; page++) {
+        const { data, error } = await sb.from(REG_TABLE)
+          .select("plate_key,memo,valid_from,valid_until")
+          .order("plate_key")
+          .range(page * 1000, page * 1000 + 999);
+        if (error) { regErr = error; break; }
+        data.forEach((r) => {                       // 저장 공간을 아끼려고 빈 칸은 넣지 않음
+          const v = { p: norm(r.plate_key) };
+          if (r.memo) v.memo = r.memo;
+          if (r.valid_from) v.from = r.valid_from;
+          if (r.valid_until) v.until = r.valid_until;
+          regs.push(v);
+        });
+        if (data.length < 1000) break;
+      }
+      if (regErr) console.warn("정기 차량 표를 읽지 못했어요:", regErr.message);   // 일부만 받았으면 이전 목록 유지
+      else store.regDb = regs;
       store.syncedAt = Date.now(); lastSyncError = false;
       saveStore();
       renderLedger();
@@ -503,7 +530,7 @@
     if (!found.length) return null;
     const cands = [];
     found.forEach((c) => { cands.push(c); const m = c.match(/^\d(\d{2}[가-힣]\d{4})$/); if (m) cands.push(m[1]); });
-    const known = new Set(allRows().map((r) => r.p).concat(allRegs().map((r) => r.p)));
+    const known = knownPlates();
     return cands.find((c) => known.has(c)) || found[0];
   }
 
@@ -861,12 +888,14 @@
         box.innerHTML = `<p class="empty">${allRegs().length ? "조건에 맞는 정기 차량이 없어요." : (sb ? "등록된 정기 차량이 없어요. Supabase의 regular_vehicles 표에 넣으면 여기에 보입니다." : "정기 차량이 없어요. 예약 파일에 '정기' 줄을 넣어 불러오세요.")}</p>`;
         return;
       }
-      box.innerHTML = `<div class="day"><div class="day-label">정기 차량<span>· ${regs.length}대</span></div>` + regs.map((r) => {
+      const total = regs.length, more = total > LIST_MAX;
+      if (more) regs = regs.slice(0, LIST_MAX);
+      box.innerHTML = `<div class="day"><div class="day-label">정기 차량<span>· ${total.toLocaleString()}대</span></div>` + regs.map((r) => {
         const on = regActive(r, today);
         const period = r.until ? `~${r.until.slice(2).replace(/-/g, ".")}` : "무기한";
         return `<div class="row"><span class="t reg-memo">${esc(r.memo || "정기")}</span><span><span class="mini-plate">${esc(pretty(r.p))}</span></span>` +
           `<span class="chip ${on ? "reg" : "after"}">${on ? period : "기간 아님"}</span></div>`;
-      }).join("") + `</div>`;
+      }).join("") + (more ? `<p class="empty">앞의 ${LIST_MAX}대만 보여요. 위 검색 칸에 번호 일부를 넣어 찾아보세요.</p>` : "") + `</div>`;
       return;
     }
     let list = allRows().filter((r) => (view === "today" ? r.d === today : r.d >= today));
@@ -879,11 +908,15 @@
         : (view === "today" ? "오늘 예약이 없어요." : "조건에 맞는 예약이 없어요.")}</p>`;
       return;
     }
+    const dayN = {};                     // 날짜별 건수는 잘라내기 전 전체로 셈
+    list.forEach((r) => { dayN[r.d] = (dayN[r.d] || 0) + 1; });
+    const totalN = list.length, cut = totalN > LIST_MAX;
+    if (cut) list = list.slice(0, LIST_MAX);
     const byDay = new Map();
     list.forEach((r) => { if (!byDay.has(r.d)) byDay.set(r.d, []); byDay.get(r.d).push(r); });
     let html = "";
     for (const [d, rs] of byDay) {
-      html += `<div class="day"><div class="day-label">${fmtDate(d)}${d === today ? '<span class="tag">오늘</span>' : ""}<span>· ${rs.length}대</span></div>`;
+      html += `<div class="day"><div class="day-label">${fmtDate(d)}${d === today ? '<span class="tag">오늘</span>' : ""}<span>· ${dayN[d]}대</span></div>`;
       for (const r of rs) {
         let chip = "<span></span>";
         if (d === today) { const [cls, txt] = CHIP[slotState(r.t).state]; chip = `<span class="chip ${cls}">${txt}</span>`; }
@@ -891,6 +924,7 @@
       }
       html += `</div>`;
     }
+    if (cut) html += `<p class="empty">전체 ${totalN.toLocaleString()}건 중 앞의 ${LIST_MAX}건만 보여요. 검색 칸에 번호 일부를 넣어 찾아보세요.</p>`;
     box.innerHTML = html;
   }
 

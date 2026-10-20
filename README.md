@@ -14,7 +14,8 @@
 
 | 누가 | 주소 |
 |---|---|
-| 방문자 (예약 신청) | `https://<아이디>.github.io/plate-reservation/` → 자동으로 `apply.html`로 이동 |
+| 방문자 (안내·메뉴) | `https://<아이디>.github.io/plate-reservation/` — 사전예약제 공지 + [예약 신청/확인]·[주차비 사전 결제] 메뉴 (`index.html`) |
+| 방문자 (예약 신청) | `https://<아이디>.github.io/plate-reservation/apply.html` — 안내 페이지의 [예약 신청/확인] 버튼으로 연결 |
 | 직원 (예약 확인 앱) | `https://<아이디>.github.io/plate-reservation/check-7k2q.html` — 직원에게만 알려 주세요 |
 | 관리자 (예약 개설 관리) | `https://<아이디>.github.io/plate-reservation/admin-7k2q.html` — 관리자에게만 알려 주세요 |
 
@@ -257,7 +258,7 @@ window.APP_CONFIG = {
 
 | 파일 | 역할 |
 |---|---|
-| `index.html` | 맨 앞 주소 → 신청 페이지(`apply.html`)로 이동 |
+| `index.html` | 맨 앞 주소 — 사전예약제 안내문과 메뉴(예약 신청/확인, 주차비 사전 결제). 공지 문구·결제 주소는 이 파일에서 고침 |
 | `check-7k2q.html` | 직원용 예약 확인 앱 화면 |
 | `style.css` | 디자인 (라이트/다크 모드) |
 | `app.js` | 카메라 인식, 신호등 판정, 예약 현황 |

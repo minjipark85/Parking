@@ -2,13 +2,144 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>방문 차량 예약</title>
-  <!-- 맨 앞 주소로 들어오면 예약 신청 페이지로 바로 이동 -->
-  <meta http-equiv="refresh" content="0; url=apply.html">
-  <script>location.replace("apply.html" + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>명수당 방문 차량 예약 | 한국외대 글로벌캠퍼스</title>
+  <meta name="theme-color" content="#1d4fb0">
+  <meta name="description" content="한국외대 글로벌캠퍼스 명수당 방문 차량 사전예약제 안내 — 단풍철 주말 방문 차량은 사전에 일자와 시간대를 예약해 주세요.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="apply.css?v=4">
+  <style>
+    :root { --leaf: #c2410c; --leaf-soft: #fdecdf; }
+    @media (prefers-color-scheme: dark) { :root { --leaf: #ff9a62; --leaf-soft: #3a2014; } }
+    .page.home { max-width: 720px; gap: 18px; }
+
+    /* 머리 */
+    .hero { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 26px 20px 22px; display: grid; gap: 14px; position: relative; overflow: hidden; }
+    .hero::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 6px; background: linear-gradient(90deg, var(--leaf), #e8a33d 55%, var(--accent)); }
+    .kicker { margin: 0; font-size: 14px; font-weight: 700; color: var(--leaf); letter-spacing: .02em; }
+    .hero h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(26px, 6.4vw, 38px); line-height: 1.25; }
+    .hero h1 small { display: block; font-size: .62em; color: var(--muted); margin-bottom: 4px; }
+    .lead { margin: 0; font-size: 16px; color: var(--ink); }
+
+    /* 메뉴 */
+    .menu { display: grid; gap: 12px; grid-template-columns: 1fr; }
+    @media (min-width: 560px) { .menu { grid-template-columns: 1fr 1fr; } }
+    .menu a { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; min-height: 84px; padding: 16px 18px; border-radius: 16px; text-decoration: none; color: inherit; border: 1px solid var(--line); background: var(--surface); }
+    .menu a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .menu a.go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    .menu .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+    .menu a.go .ic { background: rgba(255, 255, 255, .18); color: inherit; }
+    .menu .ic svg { width: 24px; height: 24px; }
+    .menu b { display: block; font-size: 18px; }
+    .menu span.sub { display: block; font-size: 13px; opacity: .8; margin-top: 2px; }
+    .menu .arr { font-size: 22px; opacity: .7; }
+
+    /* 안내문 */
+    .guide { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 6px 20px; }
+    .guide h2.gt { margin: 18px 0 4px; font-size: 18px; }
+    .item { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 16px 0; border-top: 1px solid var(--line); }
+    .item:first-of-type { border-top: 0; }
+    .item .num { margin-top: 1px; }
+    .item h3 { margin: 0 0 6px; font-size: 17px; }
+    .item p { margin: 0 0 6px; font-size: 15px; }
+    .item p:last-child { margin-bottom: 0; }
+    .item .note { color: var(--muted); font-size: 14px; }
+    .hl { background: var(--leaf-soft); color: var(--leaf); font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+    .facts { display: grid; gap: 6px; margin: 6px 0 8px; padding: 0; list-style: none; }
+    .facts li { display: grid; grid-template-columns: 92px 1fr; gap: 8px; font-size: 15px; }
+    .facts li > span:first-child { color: var(--muted); font-size: 14px; }
+    .slots { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; padding: 0; list-style: none; }
+    .slots li { font-family: var(--mono); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; background: var(--bg); }
+    .callout { margin-top: 8px !important; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); border: 1px solid var(--warn); font-size: 14px !important; }
+
+    /* 하단 학교 정보 */
+    .foot { text-align: left; margin-top: 6px; border-top: 1px solid var(--line); padding: 22px 4px 0; display: grid; gap: 10px; font-size: 13px; color: var(--muted); }
+    .foot .org { display: flex; align-items: center; gap: 12px; color: var(--ink); }
+    .foot .seal { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #0a2a5c; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .02em; flex: none; }
+    .foot .org b { display: block; font-size: 15px; }
+    .foot .org span { font-size: 12px; color: var(--muted); }
+    .foot p { margin: 0; }
+  </style>
 </head>
 <body>
-  <p><a href="apply.html">방문 차량 예약 페이지로 이동</a></p>
+<div class="page home">
+
+  <header class="hero">
+    <p class="kicker">단풍철 방문객 사전예약제 시행</p>
+    <h1><small>한국외대 글로벌캠퍼스</small>명수당 방문 차량 예약 시스템</h1>
+    <p class="lead">단풍철 방문객 집중으로 인한 학내 구성원 및 인근 주민의 불편을 해소하고, 쾌적한 캠퍼스 환경을 조성하기 위해 방문객 사전예약제를 시행합니다.</p>
+  </header>
+
+  <nav class="menu" aria-label="바로가기">
+    <a class="go" href="apply.html">
+      <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M8.5 15l2.5 2.5 4.5-5"/></svg></span>
+      <span><b>예약 신청 / 확인</b><span class="sub">날짜·시간대 선택, 내 예약 조회·취소</span></span>
+      <span class="arr" aria-hidden="true">›</span>
+    </a>
+    <a href="http://203.253.68.223/prepaydef/doViewPaymentSchCar/w7jr+ABnTaqZTyXS6M+lZkHpiDXPSNMlyNWOzWxVe57B+BYL1L3oDJ21NwJ7zEuEWkH5nnFZp5ZYwIPDDzPXhA==" target="_blank" rel="noopener">
+      <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 14.5h4"/></svg></span>
+      <span><b>주차비 사전 결제</b><span class="sub">입차 후 가능 · 새 창으로 열려요</span></span>
+      <span class="arr" aria-hidden="true">↗</span>
+    </a>
+  </nav>
+
+  <main class="guide" aria-labelledby="gt">
+    <h2 class="gt" id="gt">이용 안내</h2>
+
+    <section class="item" aria-labelledby="g1">
+      <span class="num" aria-hidden="true">1</span>
+      <div>
+        <h3 id="g1">사전 예약</h3>
+        <p>단풍철 주말 방문을 희망하는 경우 사전에 일자와 시간대를 정하여 예약하여야 합니다.</p>
+        <p><span class="hl">사전예약하지 않은 차량은 입차가 제한됩니다.</span></p>
+      </div>
+    </section>
+
+    <section class="item" aria-labelledby="g2">
+      <span class="num" aria-hidden="true">2</span>
+      <div>
+        <h3 id="g2">운영기간 및 운영일</h3>
+        <ul class="facts">
+          <li><span>운영기간</span><span><b>2026년 10월 24일(토) ~ 11월 22일(일)</b>, 주말만 예약 시행</span></li>
+          <li><span>예약 가능</span><span><b>2026년 10월 21일(수) 14시 이후</b></span></li>
+        </ul>
+        <p class="note">현재 시험 운영 기간으로, 11월 1일까지만 오픈하며 이후 기간은 추후 오픈합니다.</p>
+      </div>
+    </section>
+
+    <section class="item" aria-labelledby="g3">
+      <span class="num" aria-hidden="true">3</span>
+      <div>
+        <h3 id="g3">방문 시간</h3>
+        <p>방문 시간대별로 예약을 진행하며, 예약 차량은 <b>해당 시간 내에 입차 및 출차를 완료</b>해야 합니다.</p>
+        <ul class="slots" aria-label="방문 시간대">
+          <li>09:00 ~ 12:00</li><li>12:00 ~ 15:00</li><li>15:00 ~ 18:00</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="item" aria-labelledby="g4">
+      <span class="num" aria-hidden="true">4</span>
+      <div>
+        <h3 id="g4">주차비 결제</h3>
+        <p>방문 예약 시 주차비를 선결제하여야 합니다.</p>
+        <p class="callout">시험 운영 기간 중 선결제는 시행하지 않으며, 원활한 출차를 위하여 <b>출차 전 사전 결제</b>하여 주시기 바랍니다. (위 <b>주차비 사전 결제</b> 메뉴 이용)</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="org">
+      <span class="seal" aria-hidden="true">HUFS</span>
+      <span><b>한국외국어대학교 글로벌캠퍼스</b><span>Hankuk University of Foreign Studies · Global Campus</span></span>
+    </div>
+    <p>경기도 용인시 처인구 외대로 81</p>
+    <p>© Hankuk University of Foreign Studies. All rights reserved.</p>
+  </footer>
+
+</div>
 </body>
 </html>

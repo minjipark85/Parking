@@ -54,7 +54,7 @@ language sql stable security definer set search_path = public as $$
     (select capacity from slot_capacity where slot = p_slot),
     200);
 $$;
-revoke all on function public.slot_cap(date, time) from public;
+revoke all on function public.slot_cap(date, time) from public, anon, authenticated;   -- 내부용 (Supabase는 새 함수에 anon 실행 권한을 자동으로 주므로 직접 회수)
 
 -- ------------------------------------------------------------
 -- 3) 예약 가능한 날짜 — open_dates 표에 있는 날짜만 (관리자 페이지에서 열고 닫음)
@@ -148,6 +148,12 @@ begin
   --  · "서울12가3456"처럼 지역명이 붙은 번호도 같은 차량으로 봄
   --  · 같은 차량·날짜 신청을 한 줄로 세워, 동시에 두 건을 넣어도 하나만 통과
   perform pg_advisory_xact_lock(hashtext('plate-day:' || v_core || ':' || p_date::text));
+  --  · 같은 시간대에 이미 있으면 'duplicate', 다른 시간대에 있으면 'dup_day'
+  if exists (select 1 from reservations
+              where reserve_date = p_date and reserve_time = p_slot
+                and regexp_replace(plate_key, '^[가-힣]{2}', '') = v_core) then
+    return json_build_object('ok', false, 'error', 'duplicate');
+  end if;
   if exists (select 1 from reservations
               where reserve_date = p_date
                 and regexp_replace(plate_key, '^[가-힣]{2}', '') = v_core) then

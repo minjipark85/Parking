@@ -154,6 +154,12 @@ grant execute on function public.admin_open_dates(date[], timestamptz) to authen
 grant execute on function public.admin_close_dates(date[]) to authenticated;
 revoke all on function public.admin_set_caps(date[], int, int, int) from public;
 grant execute on function public.admin_set_caps(date[], int, int, int) to authenticated;
+-- Supabase는 새 함수에 로그인 안 한 사용자(anon) 실행 권한을 자동으로 붙이므로 관리자 함수는 직접 회수
+-- (함수 안에서도 관리자인지 다시 확인하지만, 이중으로 막음)
+revoke execute on function public.admin_list_dates(date, date) from anon;
+revoke execute on function public.admin_open_dates(date[], timestamptz) from anon;
+revoke execute on function public.admin_close_dates(date[]) from anon;
+revoke execute on function public.admin_set_caps(date[], int, int, int) from anon;
 
 -- 8) 첫 관리자 지정 예시 — 이메일을 바꿔서 실행하거나, Table Editor에서 is_admin 을 체크하세요.
 -- update public.staff_emails set is_admin = true where lower(email) = lower('admin@example.com');

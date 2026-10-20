@@ -1,0 +1,63 @@
+/* 예약 개설 관리 — apply.css 의 색·글꼴을 그대로 쓰고 달력만 추가 */
+.page.admin { max-width: 880px; }
+.who { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.who span { max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.small { min-height: 40px; font-size: 14px; padding: 0 14px; font-weight: 600; }
+#logoutBtn.arm { color: var(--bad); border-color: var(--bad); }
+.login-box { max-width: 420px; margin: 4vh auto 0; width: 100%; }
+
+/* 달력 */
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cal-head h2 { font-family: var(--display); font-weight: 400; font-size: 24px; }
+.nav { min-height: 44px; min-width: 44px; padding: 0; font-size: 24px; }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid var(--line); }
+.sw.open { background: var(--ok-soft); border-color: var(--ok); }
+.sw.sched { background: var(--warn-soft); border-color: var(--warn); }
+.sw.closed { background: var(--surface); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-grid.dow span { text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cal-grid.dow .sun { color: var(--bad); } .cal-grid.dow .sat { color: var(--accent); }
+.day { min-height: 76px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); padding: 6px; display: grid; align-content: start; gap: 2px; text-align: left; cursor: pointer; font-size: 12px; min-width: 0; }
+.day .n { font-family: var(--mono); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.day.sun .n { color: var(--bad); } .day.sat .n { color: var(--accent); }
+.day .st .sh { display: none; }
+.day .st { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day .bk { color: var(--muted); }
+.day.open { background: var(--ok-soft); border-color: var(--ok); }
+.day.open .st { color: var(--ok); }
+.day.sched { background: var(--warn-soft); border-color: var(--warn); }
+.day.sched .st { color: var(--warn); }
+.day.past { opacity: .45; cursor: default; }
+.day.blank { border: 0; background: transparent; cursor: default; }
+.day[aria-selected="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
+.day:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 480px) {
+  .day { min-height: 58px; padding: 4px; font-size: 10px; }
+  .day .n { font-size: 14px; }
+  .day .bk { display: none; }
+  .day .st .lg { display: none; } .day .st .sh { display: inline; }
+}
+.quick { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 열기·닫기 */
+.actions { box-shadow: 0 -6px 18px rgba(0, 0, 0, .06); }
+@media (min-width: 700px) and (min-height: 760px) { .actions { position: sticky; bottom: 0; z-index: 5; } }
+.sel-list { margin: 0; font-size: 14px; color: var(--muted); }
+.when { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; display: grid; gap: 8px; margin: 0; }
+.when legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
+.when label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 15px; }
+.when input[type="radio"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.when input[type="datetime-local"] { min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); color: var(--ink); }
+#closeBtn.arm { color: var(--bad); border-color: var(--bad); }
+.toast { margin: 0; font-size: 14px; font-weight: 600; color: var(--ok); }
+.toast:empty { display: none; }
+
+/* 요약 */
+.summary-list { display: grid; gap: 0; }
+.sum-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.sum-row:first-child { border-top: 0; }
+.sum-row .when2 { font-size: 13px; font-weight: 700; }
+.sum-row .when2.open { color: var(--ok); } .sum-row .when2.sched { color: var(--warn); }
+.sum-row .meta { font-size: 13px; color: var(--muted); }

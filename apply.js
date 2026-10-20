@@ -6,9 +6,7 @@
   var pad = function (n) { return String(n).padStart(2, "0"); };
   var ymd = function (d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
   var DOW = ["일", "월", "화", "수", "목", "금", "토"];
-  // 예약 가능한 날짜 — supabase-apply.sql 의 apply_date_allowed() 와 같게 맞추세요
-  var OPEN_START = "2026-10-24", OPEN_END = "2026-11-22";
-  var OPEN_DAYS = [6, 0];                  // 요일: 0=일 1=월 … 6=토  → 토·일만
+  // 예약 가능한 날짜는 관리자 페이지(admin-7k2q.html)에서 열고 닫음 → DB에서 받아 옴
   var SLOTS = [{ s: "09:00", e: "12:00" }, { s: "12:00", e: "15:00" }, { s: "15:00", e: "18:00" }];
   var norm = function (s) { return String(s || "").replace(/[\s\-·.]/g, "").toUpperCase(); };
   var PLATE_RE = /^([가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
@@ -38,7 +36,7 @@
     duplicate: "이 차량은 같은 날짜·시간대에 이미 예약돼 있어요. [내 예약 확인]에서 볼 수 있어요.",
     regular: "정기 등록 차량이에요. 예약 없이 출입할 수 있어요.",
     slot_over: "이미 지난 시간대예요. 다른 시간대를 골라 주세요.",
-    bad_date: "예약은 10월 24일 ~ 11월 22일의 토·일요일만 받아요.",
+    bad_date: "이 날짜는 지금 예약을 받지 않아요. 다른 날짜를 골라 주세요.",
     bad_slot: "시간대를 골라 주세요.",
     bad_plate: "차량번호 형식을 확인해 주세요. 예: 12가3456",
     bad_name: "이름을 입력해 주세요.",
@@ -56,7 +54,7 @@
   }
   $("tabApply").addEventListener("click", function () { show("apply"); loadSlots(); });
   $("tabMine").addEventListener("click", function () { show("mine"); });
-  $("againBtn").addEventListener("click", function () { show("apply"); renderDates(); loadSlots(); });
+  $("againBtn").addEventListener("click", function () { show("apply"); loadDates(); });
   $("toMineBtn").addEventListener("click", function () {
     $("mPlate").value = lastDone.plate || ""; $("mPhone").value = lastDone.phone || "";
     show("mine"); if (lastDone.plate) loadMine();
@@ -65,30 +63,38 @@
   // ---------- 1. 날짜 ----------
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var parseD = function (s) { var p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); };
-  // 기간 안의 토·일 목록
-  var OPEN_LIST = [];
-  for (var d0 = parseD(OPEN_START); d0 <= parseD(OPEN_END); d0.setDate(d0.getDate() + 1)) {
-    if (OPEN_DAYS.indexOf(d0.getDay()) >= 0) OPEN_LIST.push(ymd(d0));
-  }
-  var dateOpen = function (v) { return OPEN_LIST.indexOf(v) >= 0 && v >= ymd(today); };
-  var upcoming = OPEN_LIST.filter(dateOpen);
-  var selDate = upcoming[0] || "", selSlot = "", avail = {};
+  var OPEN_LIST = [];                      // 지금 신청할 수 있는 날짜 (DB의 apply_open_dates)
+  var datesLoaded = false;
+  var dateOpen = function (v) { return OPEN_LIST.indexOf(v) >= 0; };
+  var selDate = "", selSlot = "", avail = {};
 
+  function loadDates() {
+    if (!sb) { renderDates(); return Promise.resolve(); }
+    return sb.rpc("apply_open_dates").then(function (res) {
+      if (res.error) throw res.error;
+      OPEN_LIST = (res.data || []).map(function (r) { return String(r && typeof r === "object" ? r.open_date : r).slice(0, 10); });
+      datesLoaded = true;
+      if (!dateOpen(selDate)) { selDate = OPEN_LIST[0] || ""; selSlot = ""; }
+      renderDates();
+      loadSlots();
+    }).catch(function (e) {
+      console.error(e);
+      $("dateStrip").innerHTML = '<p class="muted">예약 가능한 날짜를 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.</p>';
+    });
+  }
   function renderDates() {
     var html = "", t = ymd(today), t1 = new Date(today); t1.setDate(t1.getDate() + 1); t1 = ymd(t1);
     OPEN_LIST.forEach(function (v) {
-      var d = parseD(v), past = v < t, cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "";
-      html += '<button type="button" class="date-chip' + cls + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '"' + (past ? " disabled" : "") + '>' +
+      var d = parseD(v), cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "";
+      html += '<button type="button" class="date-chip' + cls + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '">' +
         '<span class="dw">' + (v === t ? "오늘" : v === t1 ? "내일" : DOW[d.getDay()]) + '</span>' +
         '<span class="dd">' + d.getDate() + '</span><span class="dl">' + (d.getMonth() + 1) + '월</span></button>';
     });
     $("dateStrip").innerHTML = html;
-    if (!upcoming.length) closeApplications();
-  }
-  // 예약 기간이 모두 끝났을 때
-  function closeApplications() {
-    $("applyForm").hidden = true;
-    $("closedNote").hidden = false;
+    var none = datesLoaded && !OPEN_LIST.length;      // 열린 날짜가 하나도 없으면 안내만 보여 줌
+    $("applyForm").hidden = none;
+    $("closedNote").hidden = !none;
+    updateSummary();
   }
   $("dateStrip").addEventListener("click", function (e) {
     var b = e.target.closest(".date-chip"); if (!b || b.disabled) return;
@@ -166,7 +172,7 @@
 
   function updateSummary() {
     var s = $("summary");
-    if (!selDate) { s.textContent = "예약 가능한 날짜가 없어요."; return; }
+    if (!selDate) { s.textContent = datesLoaded ? "예약 가능한 날짜가 없어요." : "예약 가능한 날짜를 불러오는 중…"; return; }
     if (!selSlot) { s.innerHTML = "<b>" + dateLabel(selDate) + "</b> · 시간대를 골라 주세요."; return; }
     var p = norm($("fPlate").value);
     s.innerHTML = "<b>" + dateLabel(selDate) + " " + slotLabel(selSlot) + "</b>" + (PLATE_RE.test(p) ? " · " + esc(pretty(p)) : "");
@@ -194,6 +200,7 @@
         if (!r.ok) {
           setError(ERR[r.error] || "신청하지 못했어요. 잠시 후 다시 시도해 주세요.");
           if (r.error === "full" || r.error === "slot_over") loadSlots();
+          if (r.error === "bad_date") loadDates();
           return;
         }
         lastDone = { plate: r.plate, phone: fmtPhone(phone) };
@@ -244,8 +251,9 @@
   });
 
   // ---------- 시작 ----------
-  renderDates();
   updateSummary();
-  loadSlots();
-  setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadSlots(); }, 30000);   // 남은 자리 자동 새로고침
+  loadDates();
+  // 남은 자리 30초마다, 열린 날짜(관리자가 새로 열거나 공개 시각이 된 날)는 1분마다 새로 불러옴
+  setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadSlots(); }, 30000);
+  setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadDates(); }, 60000);
 })();

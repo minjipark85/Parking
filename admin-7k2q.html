@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>예약 개설 관리</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="apply.css?v=3">
+  <link rel="stylesheet" href="admin.css?v=2">
+</head>
+<body>
+<div class="page admin">
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>예약 개설 관리</span>
+    </div>
+    <div class="who" id="who" hidden>
+      <span id="whoEmail"></span>
+      <button type="button" class="small" id="logoutBtn">로그아웃</button>
+    </div>
+  </header>
+
+  <div class="notice" id="setupNotice" hidden></div>
+
+  <!-- 로그인 -->
+  <main id="loginView" hidden>
+    <form class="step login-box" id="loginForm" novalidate>
+      <h2>관리자 로그인</h2>
+      <p class="muted">예약 개설일은 관리자로 지정된 계정만 바꿀 수 있어요.</p>
+      <label class="field">이메일<input id="lEmail" type="email" autocomplete="username" required></label>
+      <label class="field">비밀번호<input id="lPass" type="password" autocomplete="current-password" required></label>
+      <p class="form-error" id="loginError" role="alert"></p>
+      <button type="submit" class="primary" id="loginBtn">로그인</button>
+    </form>
+  </main>
+
+  <!-- 관리 화면 -->
+  <main id="adminView" hidden>
+    <section class="step" aria-labelledby="calTitle">
+      <div class="cal-head">
+        <button type="button" class="nav" id="prevMonth" aria-label="이전 달">‹</button>
+        <h2 id="calTitle"></h2>
+        <button type="button" class="nav" id="nextMonth" aria-label="다음 달">›</button>
+      </div>
+      <ul class="legend">
+        <li><i class="sw open"></i>예약 받는 중</li>
+        <li><i class="sw sched"></i>공개 예정</li>
+        <li><i class="sw closed"></i>닫힘</li>
+      </ul>
+      <div class="cal-grid dow" aria-hidden="true"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
+      <div class="cal-grid" id="calGrid" role="grid" aria-labelledby="calTitle"></div>
+      <div class="quick">
+        <button type="button" class="small" id="pickWeekend">이 달 토·일 모두 선택</button>
+        <button type="button" class="small" id="pickClear">선택 해제</button>
+      </div>
+    </section>
+
+    <section class="step actions" aria-labelledby="actTitle">
+      <h2 id="actTitle"><span id="selCount">0</span>일 선택됨</h2>
+      <p class="sel-list" id="selList">달력에서 날짜를 눌러 고르세요. (지난 날짜는 고를 수 없어요)</p>
+      <fieldset class="when">
+        <legend>열 때 공개 시점</legend>
+        <label><input type="radio" name="when" value="now" checked> 바로 공개</label>
+        <label><input type="radio" name="when" value="later"> 공개 일시 지정
+          <input type="datetime-local" id="opensAt" disabled>
+        </label>
+      </fieldset>
+      <p class="form-error" id="actError" role="alert"></p>
+      <div class="row-buttons">
+        <button type="button" class="primary" id="openBtn" disabled>선택한 날 열기</button>
+        <button type="button" id="closeBtn" disabled>선택한 날 닫기</button>
+      </div>
+      <p class="toast" id="toast" role="status"></p>
+    </section>
+
+    <section class="step" aria-labelledby="sumTitle">
+      <h2 id="sumTitle">앞으로 열려 있는 날짜</h2>
+      <div id="summary" class="summary-list"><p class="muted">불러오는 중…</p></div>
+    </section>
+  </main>
+</div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="admin.js?v=2"></script>
+</body>
+</html>

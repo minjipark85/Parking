@@ -35,14 +35,25 @@ drop policy if exists "read slot capacity" on public.slot_capacity;
 create policy "read slot capacity" on public.slot_capacity for select using (true);
 
 -- ------------------------------------------------------------
--- 3) 예약 가능한 날짜 (여기만 바꾸면 됩니다 — apply.js 맨 위 OPEN_START·OPEN_END·OPEN_DAYS도 같게)
---    2026-10-24 ~ 2026-11-22 기간의 토요일·일요일만
---    요일 번호: 1=월 2=화 3=수 4=목 5=금 6=토 7=일
+-- 3) 예약 가능한 날짜 — open_dates 표에 있는 날짜만 (관리자 페이지에서 열고 닫음)
+--    처음에는 2026-10-24 ~ 11-22 토·일을 넣어 둡니다. 자세한 관리는 supabase-opendates.sql 참고.
 -- ------------------------------------------------------------
+create table if not exists public.open_dates (
+  open_date  date primary key,
+  opens_at   timestamptz,                 -- 비우면 바로 공개, 일시를 넣으면 그때부터 공개
+  created_at timestamptz not null default now()
+);
+alter table public.open_dates enable row level security;
+revoke all on public.open_dates from anon, authenticated;
+insert into public.open_dates (open_date)
+select d::date from generate_series(date '2026-10-24', date '2026-11-22', interval '1 day') d
+ where extract(isodow from d) in (6, 7)
+on conflict (open_date) do nothing;
+
 create or replace function public.apply_date_allowed(p_date date) returns boolean
-language sql immutable as $$
-  select p_date between date '2026-10-24' and date '2026-11-22'
-     and extract(isodow from p_date) in (6, 7)
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from open_dates
+                  where open_date = p_date and (opens_at is null or opens_at <= now()));
 $$;
 drop function if exists public.apply_max_days();     -- 예전 규칙(오늘~30일) 삭제
 

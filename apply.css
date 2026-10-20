@@ -64,7 +64,7 @@ form#applyForm { display: grid; gap: 14px; }
 .date-open { font-size: 11px; line-height: 1.3; font-weight: 700; text-align: center; color: var(--warn); white-space: nowrap; letter-spacing: -.02em; }
 .date-note { margin: 0; font-size: 14px; font-weight: 600; color: var(--warn); }
 .date-note:empty { display: none; }
-#applyForm.dates-only > section:not(:first-child), #applyForm.dates-only .submit-bar { display: none; }
+#applyForm.dates-only > section:nth-of-type(n+3), #applyForm.dates-only .submit-bar { display: none; }
 .period { margin: 0; font-size: 14px; color: var(--muted); }
 .period b { color: var(--ink); }
 .closed h2 { color: var(--bad); }
@@ -84,6 +84,8 @@ form#applyForm { display: grid; gap: 14px; }
 .slot[aria-checked="true"] { border: 2px solid var(--accent); background: var(--accent-soft); padding: 9px 13px; }
 .slot:disabled { cursor: not-allowed; opacity: .55; }
 .slot:disabled .left { color: var(--muted); }
+.slot.pre { opacity: .42; border-style: dashed; }
+.slot.pre .left { color: var(--warn); }
 
 /* 입력 */
 .field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); min-width: 0; }

@@ -77,6 +77,7 @@
 
   // 공개 예정 날짜 { date: "2026-10-24", at: Date } — 공개 시각이 되면 자동으로 다시 불러옴
   var SCHED = [], openTimer = null;
+  var schedOf = function (v) { for (var i = 0; i < SCHED.length; i++) if (SCHED[i].date === v) return SCHED[i]; return null; };
   function loadDates() {
     if (!sb) { renderDates(); return Promise.resolve(); }
     var upcoming = sb.rpc("apply_upcoming_dates").then(function (r) { return r.error ? [] : (r.data || []); }, function () { return []; });
@@ -90,7 +91,7 @@
       var next = SCHED.reduce(function (m, x) { return !m || x.at < m ? x.at : m; }, null);
       if (next) openTimer = setTimeout(loadDates, Math.min(2147483000, Math.max(1000, next - new Date() + 1500)));
       datesLoaded = true;
-      if (!dateOpen(selDate)) { selDate = OPEN_LIST[0] || ""; selSlot = ""; }
+      if (!dateOpen(selDate) && !schedOf(selDate)) { selDate = OPEN_LIST[0] || (SCHED[0] && SCHED[0].date) || ""; selSlot = ""; }
       renderDates();
       loadSlots();
     }).catch(function (e) {
@@ -109,8 +110,8 @@
     var items = OPEN_LIST.map(function (v) { return { date: v }; }).concat(SCHED).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
     items.forEach(function (it) {
       var v = it.date, d = parseD(v), cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "", lb = it.at ? openLabel(it.at) : null;
-      html += '<div class="date-col"><button type="button" class="date-chip' + cls + (lb ? " sched" : "") + '" role="radio" data-date="' + v + '" aria-checked="' + (!lb && v === selDate) + '"' +
-        (lb ? ' aria-disabled="true" data-open="' + lb.day + " " + lb.time + '" aria-label="' + (d.getMonth() + 1) + "월 " + d.getDate() + "일, " + lb.day + " " + lb.time + ' 오픈 예정"' : "") + '>' +
+      html += '<div class="date-col"><button type="button" class="date-chip' + cls + (lb ? " sched" : "") + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '"' +
+        (lb ? ' data-open="' + lb.day + " " + lb.time + '" aria-label="' + (d.getMonth() + 1) + "월 " + d.getDate() + "일, " + lb.day + " " + lb.time + ' 오픈 예정"' : "") + '>' +
         '<span class="dw">' + (v === t ? "오늘" : v === t1 ? "내일" : DOW[d.getDay()]) + '</span>' +
         '<span class="dd">' + d.getDate() + '</span><span class="dl">' + (d.getMonth() + 1) + '월</span></button>' +
         (lb ? '<span class="date-open" aria-hidden="true">' + lb.day + "<br>" + lb.time + " 오픈</span>" : "") + '</div>';
@@ -121,19 +122,22 @@
     $("applyForm").hidden = none && !SCHED.length;
     $("applyForm").classList.toggle("dates-only", none && SCHED.length > 0);
     $("closedNote").hidden = !(none && !SCHED.length);
-    $("dateNote").textContent = none && SCHED.length ? "아직 신청할 수 있는 날짜가 없어요. 흐린 날짜는 아래 표시된 시각에 열려요." : "";
+    var pre = schedOf(selDate), plb = pre ? openLabel(pre.at) : null;
+    $("dateNote").textContent = pre ? plb.day + " " + plb.time + "에 열려요. 시간대는 그때부터 고를 수 있어요." : none && SCHED.length ? "아직 신청할 수 있는 날짜가 없어요. 흐린 날짜는 아래 표시된 시각에 열려요." : "";
     updateSummary();
   }
   $("dateStrip").addEventListener("click", function (e) {
     var b = e.target.closest(".date-chip"); if (!b || b.disabled) return;
-    if (b.classList.contains("sched")) { $("dateNote").textContent = b.dataset.open + "에 열려요. 그때부터 이 날짜를 신청할 수 있어요."; return; }
     pickDate(b.dataset.date);
   });
   function pickDate(v) {
-    if (!dateOpen(v)) { setError(ERR.bad_date); return; }
+    var pre = schedOf(v);
+    if (!dateOpen(v) && !pre) { setError(ERR.bad_date); return; }
     selDate = v; selSlot = "";
-    Array.prototype.forEach.call(document.querySelectorAll(".date-chip"), function (c) { c.setAttribute("aria-checked", String(c.dataset.date === v && !c.classList.contains("sched"))); });
-    if (OPEN_LIST.length) $("dateNote").textContent = "";
+    Array.prototype.forEach.call(document.querySelectorAll(".date-chip"), function (c) { c.setAttribute("aria-checked", String(c.dataset.date === v)); });
+    // 공개 전 날짜: 시간대는 흐리게(누를 수 없음) 보여 주고, 언제 열리는지 안내
+    if (pre) { var lb = openLabel(pre.at); $("dateNote").textContent = lb.day + " " + lb.time + "에 열려요. 시간대는 그때부터 고를 수 있어요."; }
+    else if (OPEN_LIST.length) $("dateNote").textContent = "";
     setError(""); loadSlots();
   }
 
@@ -162,17 +166,17 @@
   }
   function renderSlots(a) {
     if (!a) { $("slotList").innerHTML = '<p class="muted">지금은 남은 자리를 볼 수 없어요.</p>'; return; }
-    var html = "";
+    var html = "", pre = schedOf(selDate), plb = pre ? openLabel(pre.at) : null;
     SLOTS.forEach(function (x) {
       var info = a[x.s] || { cap: 0, booked: 0 };
       var left = Math.max(0, info.cap - info.booked);
       var past = slotPast(x.s), closed = info.cap === 0;
-      var disabled = past || left === 0;
+      var disabled = !!pre || past || left === 0;
       if (disabled && selSlot === x.s) selSlot = "";
-      var label = past ? "지난 시간" : closed ? "신청 안 받음" : left === 0 ? "마감" : "남은 자리 " + left + " / " + info.cap;
+      var label = pre ? plb.day + " " + plb.time + " 오픈" : past ? "지난 시간" : closed ? "신청 안 받음" : left === 0 ? "마감" : "남은 자리 " + left + " / " + info.cap;
       var pct = info.cap ? Math.min(100, Math.round((info.booked / info.cap) * 100)) : 100;
       var few = !disabled && left <= Math.max(2, Math.ceil(info.cap * 0.2));
-      html += '<button type="button" class="slot' + (few ? " few" : "") + '" role="radio" data-slot="' + x.s + '" aria-checked="' + (selSlot === x.s) + '"' + (disabled ? " disabled" : "") + '>' +
+      html += '<button type="button" class="slot' + (few ? " few" : "") + (pre ? " pre" : "") + '" role="radio" data-slot="' + x.s + '" aria-checked="' + (selSlot === x.s) + '"' + (disabled ? " disabled" : "") + '>' +
         '<span class="time">' + x.s + ' ~ ' + x.e + '</span><span class="left">' + label + '</span>' +
         '<span class="bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span></button>';
     });
@@ -201,7 +205,12 @@
   ["fPlate", "fName", "fPhone"].forEach(function (id) { $(id).addEventListener("input", updateSummary); });
 
   function updateSummary() {
-    var s = $("summary");
+    var s = $("summary"), pre = schedOf(selDate), sbt = $("submitBtn");
+    if (!sbt.dataset.busy) {                 // 공개 전 날짜면 신청 버튼도 잠금
+      var pl = pre ? openLabel(pre.at) : null;
+      sbt.disabled = !!pre; sbt.textContent = pre ? pl.day + " " + pl.time + " 오픈 예정" : "예약 신청";
+    }
+    if (pre) { var l2 = openLabel(pre.at); s.innerHTML = "<b>" + dateLabel(selDate) + "</b> · " + l2.day + " " + l2.time + "부터 신청할 수 있어요."; return; }
     if (!selDate) { s.textContent = datesLoaded ? "예약 가능한 날짜가 없어요." : "예약 가능한 날짜를 불러오는 중…"; return; }
     if (!selSlot) { s.innerHTML = "<b>" + dateLabel(selDate) + "</b> · 시간대를 골라 주세요."; return; }
     var p = norm($("fPlate").value);
@@ -222,7 +231,7 @@
     if (!/^01\d{8,9}$/.test(phone)) { $("fPhone").focus(); return setError(ERR.bad_phone); }
     if (!$("fAgree").checked) return setError("개인정보 수집·이용에 동의해 주세요.");
     setError("");
-    var btn = $("submitBtn"); btn.disabled = true; btn.textContent = "신청하는 중…";
+    var btn = $("submitBtn"); btn.disabled = true; btn.textContent = "신청하는 중…"; btn.dataset.busy = "1";
     sb.rpc("request_reservation", { p_date: selDate, p_slot: selSlot, p_plate: plate, p_name: name, p_phone: phone })
       .then(function (res) {
         if (res.error) throw res.error;
@@ -242,7 +251,7 @@
         show("done");
       })
       .catch(function (err) { console.error(err); setError("신청하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요."); })
-      .then(function () { btn.disabled = false; btn.textContent = "예약 신청"; });
+      .then(function () { delete btn.dataset.busy; btn.disabled = false; btn.textContent = "예약 신청"; updateSummary(); });
   });
 
   // ---------- 내 예약 확인·취소 ----------

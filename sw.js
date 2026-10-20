@@ -1,13 +1,13 @@
 // 서비스 워커: 앱 파일을 기기에 저장해 두고 인터넷 없이도 열리게 한다.
 // 앱 파일을 고쳐서 올릴 때는 아래 VERSION 숫자를 하나 올리세요. (예: v7 → v8)
-const VERSION = "v13";
+const VERSION = "v14";
 const APP_CACHE = `plate-app-${VERSION}`;
 const FONT_CACHE = "plate-fonts";
 
 const FILES = [
   "check-7k2q.html",
-  "style.css?v=13",
-  "app.js?v=13",
+  "style.css?v=14",
+  "app.js?v=14",
   "config.js",
   "manifest.webmanifest",
   "icon.svg",

@@ -194,6 +194,9 @@
 
 신청 페이지에 어떤 날짜를 열지 관리자가 달력에서 고릅니다. 기간별로 나눠 오픈할 때 씁니다.
 
+- **들어가는 법**: 관리자 계정으로 확인 앱(`check-7k2q.html`)에 로그인하면 위쪽에 **[예약 개설 관리]** 버튼이 나옵니다. (관리자가 아닌 직원에게는 안 보임) 주소 `admin-7k2q.html`로 바로 열어도 됩니다.
+- 버튼이 안 보이면: ① `supabase-opendates.sql` 실행 여부 ② `staff_emails`에서 그 계정의 `is_admin` 체크 ③ 새 `check-7k2q.html`·`app.js`·`style.css`·`sw.js` 업로드 여부를 확인하고, 확인 앱을 새로고침하세요.
+
 - **달력 색**: 초록 = 예약 받는 중 · 주황 = 공개 예정(지정한 일시에 자동으로 열림) · 흰색 = 닫힘. 칸 안에 그날 예약 건수가 나옵니다.
 - **열기**: 날짜를 눌러 여러 개 고름(또는 **이 달 토·일 모두 선택**) → **바로 공개** 또는 **공개 일시 지정** → **선택한 날 열기**
   - 예) 11월분을 미리 넣어 두고 공개 일시를 `11/1 10:00`으로 지정하면, 그 시각부터 신청 페이지에 나타납니다.
@@ -205,7 +208,7 @@
 ### 적용 순서
 1. Supabase **SQL Editor**에서 `supabase-opendates.sql` 실행 (`supabase-apply.sql`, `supabase-staff.sql`을 실행한 뒤에. 다시 실행해도 안전)
 2. **Table Editor → `staff_emails`** 에서 관리자 계정 줄의 **`is_admin`** 을 체크(true) — 관리자도 직원 명단에 있어야 하고, Authentication에 계정이 있어야 합니다.
-3. GitHub에 `admin-7k2q.html`, `admin.js`, `admin.css`, 바뀐 `apply.js`, `apply.html`, `supabase-apply.sql`, `supabase-opendates.sql`, `README.md` 업로드 (`config.js`는 그대로)
+3. GitHub에 `admin-7k2q.html`, `admin.js`, `admin.css`, 바뀐 `check-7k2q.html`, `app.js`, `style.css`, `sw.js`, `apply.js`, `apply.html`, `supabase-apply.sql`, `supabase-opendates.sql`, `README.md` 업로드 (`config.js`는 그대로)
 4. 관리자 주소로 로그인 → 달력에서 날짜 확인
 
 ## 예약 데이터 넣기

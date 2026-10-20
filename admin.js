@@ -30,6 +30,12 @@
     $("whoEmail").textContent = email;
     loadMonth(); loadSummary();
   }
+  // DB 설정(supabase-opendates.sql)을 아직 안 했으면 함수가 없다는 오류가 옴
+  function missingSql(e) {
+    var m = (e && (e.message || "")) + " " + (e && e.code || "");
+    return /PGRST202|42883|Could not find the function|does not exist/i.test(m);
+  }
+  var SQL_MSG = "DB에 관리자 기능이 아직 설치되지 않았어요. Supabase SQL Editor에서 supabase-opendates.sql 을 실행해 주세요.";
   function isAdmin() {
     return sb.rpc("is_admin").then(function (r) { if (r.error) throw r.error; return r.data === true; });
   }
@@ -39,9 +45,9 @@
       if (!s) return showLogin();
       return isAdmin().then(function (ok) {
         if (ok) showAdmin(s.user.email);
-        else showLogin("관리자 권한이 없는 계정(" + s.user.email + ")이에요. 관리자 계정으로 로그인하세요.");
+        else showLogin("관리자 권한이 없는 계정(" + s.user.email + ")이에요. Supabase Table Editor → staff_emails 에서 이 계정의 is_admin 을 체크하거나, 관리자 계정으로 로그인하세요.");
       });
-    }).catch(function (e) { console.error(e); showLogin("인터넷 연결을 확인해 주세요."); });
+    }).catch(function (e) { console.error(e); showLogin(missingSql(e) ? SQL_MSG : "인터넷 연결을 확인해 주세요."); });
   }
   $("loginForm").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -52,9 +58,9 @@
       if (r.error) { $("loginError").textContent = /invalid/i.test(r.error.message || "") ? "이메일 또는 비밀번호가 맞지 않아요." : "로그인하지 못했어요."; return; }
       return isAdmin().then(function (ok) {
         if (ok) { $("lPass").value = ""; showAdmin(r.data.user.email); }
-        else $("loginError").textContent = "관리자 권한이 없는 계정이에요. 관리자에게 권한을 요청하세요.";
+        else $("loginError").textContent = "관리자 권한이 없는 계정이에요. Supabase Table Editor → staff_emails 에서 이 계정의 is_admin 을 체크해 주세요.";
       });
-    }).catch(function (e) { console.error(e); $("loginError").textContent = "로그인하지 못했어요. 인터넷 연결을 확인하세요."; })
+    }).catch(function (e) { console.error(e); $("loginError").textContent = missingSql(e) ? SQL_MSG : "로그인하지 못했어요. 인터넷 연결을 확인하세요."; })
       .then(function () { btn.disabled = false; });
   });
   $("logoutBtn").addEventListener("click", function () {

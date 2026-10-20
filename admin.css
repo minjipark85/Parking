@@ -2,6 +2,7 @@
 .page.admin { max-width: 880px; }
 .who { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .who span { max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.back { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600; background: var(--surface); }
 button.small { min-height: 40px; font-size: 14px; padding: 0 14px; font-weight: 600; }
 #logoutBtn.arm { color: var(--bad); border-color: var(--bad); }
 .login-box { max-width: 420px; margin: 4vh auto 0; width: 100%; }

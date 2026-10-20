@@ -136,8 +136,10 @@
     $("selList").textContent = s.length ? s.map(md).join(", ") : "달력에서 날짜를 눌러 고르세요. (지난 날짜는 고를 수 없어요)";
     $("openBtn").disabled = !s.length; $("closeBtn").disabled = !s.length;
     var cb = $("closeBtn"); cb.classList.remove("arm"); cb.textContent = "선택한 날 닫기";
-    $("actError").textContent = "";
+    $("actError").textContent = ""; $("capError").textContent = "";
+    $("capBtn").disabled = !s.length;
     fillCaps(s);
+    renderWhen();
   }
   // 고른 날들의 정원: 모두 같으면 그 숫자, 다르면 빈칸("날짜마다 다름")
   function fillCaps(s) {
@@ -177,62 +179,75 @@
   function saveCaps(s, c) {
     return sb.rpc("admin_set_caps", { p_dates: s, p_c09: c["09"], p_c12: c["12"], p_c15: c["15"] }).then(function (r) { if (r.error) throw r.error; });
   }
-  function disarmCap() { var b = $("capBtn"); b.classList.remove("arm"); b.textContent = "정원만 저장"; }
+  function disarmCap() { var b = $("capBtn"); b.classList.remove("arm"); b.textContent = "정원 저장"; }
   SLOTS.forEach(function (k) {
     $("cap" + k).addEventListener("input", function () {
       this.classList.toggle("chg", this.value.trim() !== this.dataset.orig);
       var v = this.value.trim(), bk = Number(this.dataset.bk || 0);
       $("bk" + k).classList.toggle("over", v !== "" && /^\d+$/.test(v) && Number(v) < bk);
-      disarmCap(); $("actError").textContent = "";
+      disarmCap(); $("capError").textContent = "";
     });
   });
+  // ② 정원 저장 — 공개(열기·닫기)와 상관없이 따로 저장. 아직 닫힌 날에도 미리 정해 둘 수 있음
   $("capBtn").addEventListener("click", function () {
     var s = selDates(); if (!s.length) return;
     var c = readCaps(), b = this;
-    if (c.err) { $("actError").textContent = c.err; return; }
-    if (!c.any) { $("actError").textContent = "바꿀 정원 숫자를 넣어 주세요."; return; }
+    if (c.err) { $("capError").textContent = c.err; return; }
+    if (!c.any) { $("capError").textContent = "저장할 정원 숫자를 넣어 주세요."; return; }
     if (c.over.length && !b.classList.contains("arm")) {   // 이미 받은 예약보다 적으면 한 번 더 확인
       b.classList.add("arm"); b.textContent = "그래도 저장";
-      $("actError").textContent = "이미 받은 예약보다 정원이 적어요: " + c.over.slice(0, 4).join(", ") + (c.over.length > 4 ? " 외 " + (c.over.length - 4) + "곳" : "") + ". 기존 예약은 유지되고 추가 신청만 막혀요.";
+      $("capError").textContent = "이미 받은 예약보다 정원이 적어요: " + c.over.slice(0, 4).join(", ") + (c.over.length > 4 ? " 외 " + (c.over.length - 4) + "곳" : "") + ". 기존 예약은 유지되고 추가 신청만 막혀요.";
       return;
     }
-    b.disabled = true;
+    b.disabled = true; $("capError").textContent = "";
     saveCaps(s, c).then(function () {
-      afterChange(s.length + "일의 정원을 저장했어요 · " + SLOTS.filter(function (k) { return c[k] != null; }).map(function (k) { return SLOT_NAME[k] + " " + c[k]; }).join(", "));
-    }).catch(function (e) { console.error(e); $("actError").textContent = "정원을 저장하지 못했어요. 다시 시도해 주세요."; })
-      .then(function () { b.disabled = false; disarmCap(); });
+      afterChange(s.length + "일의 정원을 저장했어요 · " + SLOTS.filter(function (k) { return c[k] != null; }).map(function (k) { return SLOT_NAME[k] + " " + c[k]; }).join(", "), "capToast");
+    }).catch(function (e) { console.error(e); $("capError").textContent = "정원을 저장하지 못했어요. 다시 시도해 주세요."; })
+      .then(function () { b.disabled = !selDates().length; disarmCap(); });
   });
+
+  // ① 공개 시점 — 날짜·시간 칸을 누르거나 바꾸면 자동으로 "공개 일시 지정"
+  var whenLater = function () { return document.querySelector('input[name="when"]:checked').value === "later"; };
+  var DOWS = ["일", "월", "화", "수", "목", "금", "토"];
+  function pickLater() {
+    var r = document.querySelector('input[name="when"][value="later"]');
+    if (!r.checked) { r.checked = true; }
+    if (!$("opensAt").value) { var d = new Date(); d.setDate(d.getDate() + 1); $("opensAt").value = ymd(d) + "T10:00"; }   // 기본값: 내일 오전 10시
+    renderWhen();
+  }
+  function renderWhen() {
+    var h = $("whenHint"), btn = $("openBtn"), n = selDates().length;
+    h.className = "when-hint";
+    if (!whenLater()) { h.textContent = "선택한 날이 지금 바로 신청 페이지에 열려요."; btn.textContent = n ? n + "일 바로 열기" : "바로 열기"; return; }
+    var at = $("opensAt").value ? new Date($("opensAt").value) : null;
+    if (!at || isNaN(at)) { h.textContent = "공개할 날짜와 시각을 골라 주세요."; h.classList.add("bad"); btn.textContent = "공개 예약하기"; return; }
+    var lbl = (at.getMonth() + 1) + "/" + at.getDate() + "(" + DOWS[at.getDay()] + ") " + pad(at.getHours()) + ":" + pad(at.getMinutes());
+    if (at <= new Date()) { h.textContent = lbl + "은 이미 지난 시각이라 바로 열려요."; h.classList.add("bad"); }
+    else { h.textContent = lbl + "부터 신청할 수 있어요. 그 전에는 신청 페이지에 보이지 않아요."; h.classList.add("later"); }
+    btn.textContent = (at.getMonth() + 1) + "/" + at.getDate() + " " + pad(at.getHours()) + ":" + pad(at.getMinutes()) + " 공개 예약";
+  }
   Array.prototype.forEach.call(document.querySelectorAll('input[name="when"]'), function (r) {
-    r.addEventListener("change", function () {
-      var later = document.querySelector('input[name="when"]:checked').value === "later";
-      $("opensAt").disabled = !later;
-      if (later && !$("opensAt").value) {           // 기본값: 내일 오전 10시
-        var d = new Date(); d.setDate(d.getDate() + 1);
-        $("opensAt").value = ymd(d) + "T10:00";
-      }
-    });
+    r.addEventListener("change", function () { if (whenLater()) pickLater(); else renderWhen(); });
   });
-  function toast(t) { $("toast").textContent = t; setTimeout(function () { if ($("toast").textContent === t) $("toast").textContent = ""; }, 5000); }
-  function afterChange(msg) { selected = {}; toast(msg); loadMonth(); loadSummary(); }
+  ["focus", "click", "input", "change"].forEach(function (ev) { $("opensAt").addEventListener(ev, pickLater); });
+  function toast(t, id) { var el = $(id || "toast"); el.textContent = t; setTimeout(function () { if (el.textContent === t) el.textContent = ""; }, 6000); }
+  function afterChange(msg, id) { selected = {}; toast(msg, id); loadMonth(); loadSummary(); }
 
   $("openBtn").addEventListener("click", function () {
     var s = selDates(); if (!s.length) return;
-    var later = document.querySelector('input[name="when"]:checked').value === "later", at = null;
+    var later = whenLater(), at = null;
     if (later) {
       if (!$("opensAt").value) { $("actError").textContent = "공개 일시를 정해 주세요."; return; }
       at = new Date($("opensAt").value);
       if (isNaN(at)) { $("actError").textContent = "공개 일시를 다시 확인해 주세요."; return; }
+      if (at <= new Date()) at = null;                               // 지난 시각이면 바로 공개
     }
-    var c = readCaps();
-    if (c.err) { $("actError").textContent = c.err; return; }
     var btn = this; btn.disabled = true;
     sb.rpc("admin_open_dates", { p_dates: s, p_opens_at: at ? at.toISOString() : null }).then(function (r) {
       if (r.error) throw r.error;
-      return c.changed ? saveCaps(s, c) : null;                  // 정원 칸을 바꿨으면 함께 저장
-    }).then(function () {
-      afterChange(s.length + "일을 열었어요" + (at ? " · " + stamp(at.toISOString()) + "에 공개돼요." : " · 지금부터 신청 페이지에 보여요.") + (c.changed ? " 정원도 저장했어요." : ""));
+      afterChange(s.length + "일을 " + (at ? "공개 예약했어요 · " + stamp(at.toISOString()) + "부터 신청할 수 있어요." : "열었어요 · 지금부터 신청 페이지에 보여요."));
     }).catch(function (e) { console.error(e); $("actError").textContent = "열지 못했어요. 관리자 계정인지, 인터넷 연결을 확인하세요."; })
-      .then(function () { btn.disabled = !selDates().length; });
+      .then(function () { btn.disabled = !selDates().length; renderWhen(); });
   });
 
   $("closeBtn").addEventListener("click", function () {

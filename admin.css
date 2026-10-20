@@ -51,7 +51,20 @@ button.small { min-height: 40px; font-size: 14px; padding: 0 14px; font-weight: 
 .when input[type="radio"] { width: 20px; height: 20px; accent-color: var(--accent); }
 .when input[type="datetime-local"] { min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); color: var(--ink); }
 #closeBtn.arm, #capBtn.arm { color: var(--bad); border-color: var(--bad); }
-.caps { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 12px; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 10px; align-items: end; }
+.act-block { display: grid; gap: 10px; border-top: 1px dashed var(--line); padding-top: 14px; }
+.act-block h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.act-block .step-no { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 13px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.when { grid-template-columns: auto auto 1fr; align-items: center; }
+.when .opt { white-space: nowrap; }
+.when #opensAt { min-width: 0; width: 100%; }
+.when-hint { grid-column: 1 / -1; margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+.when-hint.later { color: var(--warn); }
+.when-hint.bad { color: var(--bad); }
+@media (max-width: 560px) { .when { grid-template-columns: 1fr 1fr; } .when #opensAt { grid-column: 1 / -1; } }
+button.cap-save { width: 100%; }
+@media (max-width: 480px) { .act-block .row-buttons { grid-template-columns: 1fr; } }
+.caps { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end; }
 .caps legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .caps .muted-in { font-size: 12px; }
 .caps .cap { display: grid; gap: 4px; font-size: 13px; font-weight: 600; min-width: 0; }
@@ -60,9 +73,7 @@ button.small { min-height: 40px; font-size: 14px; padding: 0 14px; font-weight: 
 .caps input.chg { border-color: var(--accent); background: var(--accent-soft); }
 .caps small { font-size: 12px; font-weight: 500; color: var(--muted); min-height: 1.4em; }
 .caps small.over { color: var(--bad); font-weight: 700; }
-.caps #capBtn { min-height: 44px; margin-bottom: calc(1.4em + 4px); }
 .caps[disabled] { opacity: .55; }
-@media (max-width: 560px) { .caps { grid-template-columns: repeat(3, minmax(0, 1fr)); } .caps #capBtn { grid-column: 1 / -1; margin-bottom: 0; } }
 .day .cp { color: var(--muted); font-family: var(--mono); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sum-row .caps-line .ci { white-space: nowrap; }
 .sum-row .caps-line b.over { color: var(--bad); }

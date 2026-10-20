@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=4">
-  <link rel="stylesheet" href="admin.css?v=6">
+  <link rel="stylesheet" href="admin.css?v=8">
 </head>
 <body>
 <div class="page admin">
@@ -63,26 +63,35 @@
     <section class="step actions" aria-labelledby="actTitle">
       <h2 id="actTitle"><span id="selCount">0</span>일 선택됨</h2>
       <p class="sel-list" id="selList">달력에서 날짜를 눌러 고르세요. (지난 날짜는 고를 수 없어요)</p>
-      <fieldset class="when">
-        <legend>열 때 공개 시점</legend>
-        <label><input type="radio" name="when" value="now" checked> 바로 공개</label>
-        <label><input type="radio" name="when" value="later"> 공개 일시 지정
-          <input type="datetime-local" id="opensAt" disabled>
-        </label>
-      </fieldset>
-      <fieldset class="caps" id="capsBox" disabled>
-        <legend>시간대별 정원 <span class="muted-in">(기본 200 · 비워 두면 그대로)</span></legend>
-        <label class="cap"><span>09~12시</span><input type="number" id="cap09" min="0" max="100000" step="1" inputmode="numeric"><small id="bk09"></small></label>
-        <label class="cap"><span>12~15시</span><input type="number" id="cap12" min="0" max="100000" step="1" inputmode="numeric"><small id="bk12"></small></label>
-        <label class="cap"><span>15~18시</span><input type="number" id="cap15" min="0" max="100000" step="1" inputmode="numeric"><small id="bk15"></small></label>
-        <button type="button" class="small" id="capBtn">정원만 저장</button>
-      </fieldset>
-      <p class="form-error" id="actError" role="alert"></p>
-      <div class="row-buttons">
-        <button type="button" class="primary" id="openBtn" disabled>선택한 날 열기</button>
-        <button type="button" id="closeBtn" disabled>선택한 날 닫기</button>
+      <div class="act-block" aria-labelledby="pubTitle">
+        <h3 id="pubTitle"><span class="step-no">1</span>예약 공개 <span class="muted-in">신청 페이지에 날짜를 열고 닫기</span></h3>
+        <fieldset class="when">
+          <legend class="sr">공개 시점</legend>
+          <label class="opt"><input type="radio" name="when" value="now" checked> 바로 공개</label>
+          <label class="opt"><input type="radio" name="when" value="later"> 공개 일시 지정</label>
+          <input type="datetime-local" id="opensAt" aria-label="공개 일시 (이 시각부터 신청 가능)">
+          <p class="when-hint" id="whenHint"></p>
+        </fieldset>
+        <p class="form-error" id="actError" role="alert"></p>
+        <div class="row-buttons">
+          <button type="button" class="primary" id="openBtn" disabled>바로 열기</button>
+          <button type="button" id="closeBtn" disabled>선택한 날 닫기</button>
+        </div>
+        <p class="toast" id="toast" role="status"></p>
       </div>
-      <p class="toast" id="toast" role="status"></p>
+
+      <div class="act-block" aria-labelledby="capTitle">
+        <h3 id="capTitle"><span class="step-no">2</span>시간대별 정원 <span class="muted-in">기본 200 · 공개와 따로 저장</span></h3>
+        <fieldset class="caps" id="capsBox" disabled>
+          <legend class="sr">시간대별 정원 (비워 두면 그대로)</legend>
+          <label class="cap"><span>09~12시</span><input type="number" id="cap09" min="0" max="100000" step="1" inputmode="numeric"><small id="bk09"></small></label>
+          <label class="cap"><span>12~15시</span><input type="number" id="cap12" min="0" max="100000" step="1" inputmode="numeric"><small id="bk12"></small></label>
+          <label class="cap"><span>15~18시</span><input type="number" id="cap15" min="0" max="100000" step="1" inputmode="numeric"><small id="bk15"></small></label>
+        </fieldset>
+        <p class="form-error" id="capError" role="alert"></p>
+        <button type="button" class="cap-save" id="capBtn" disabled>정원 저장</button>
+        <p class="toast" id="capToast" role="status"></p>
+      </div>
     </section>
 
     <section class="step" aria-labelledby="sumTitle">
@@ -95,6 +104,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=6"></script>
+<script src="admin.js?v=8"></script>
 </body>
 </html>

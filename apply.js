@@ -6,7 +6,7 @@
   var pad = function (n) { return String(n).padStart(2, "0"); };
   var ymd = function (d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
   var DOW = ["일", "월", "화", "수", "목", "금", "토"];
-  // 예약 가능한 날짜는 관리자 페이지(admin-7k2q.html)에서 열고 닫음 → DB에서 받아 옴
+  // 예약 가능한 날짜는 관리자가 열고 닫음 → DB에서 받아 옴
   var SLOTS = [{ s: "09:00", e: "12:00" }, { s: "12:00", e: "15:00" }, { s: "15:00", e: "18:00" }];
   var norm = function (s) { return String(s || "").replace(/[\s\-·.]/g, "").toUpperCase(); };
   var PLATE_RE = /^([가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;

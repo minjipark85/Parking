@@ -1487,7 +1487,6 @@
     $("loginView").hidden = false;
     $("account").hidden = true;
     $("accountEmail").textContent = "";
-    $("adminLink").hidden = true;
     $("loginError").textContent = message || "";
     $("plateInput").value = ""; lastQuery = "";
     renderLedger();
@@ -1499,10 +1498,6 @@
     $("loginView").hidden = true;
     $("account").hidden = !email;
     $("accountEmail").textContent = email ? email + (offline ? " · 오프라인" : "") : "";
-    $("adminLink").hidden = true;
-    if (email && !offline && sb) {           // 관리자 계정이면 [예약 개설 관리] 버튼 표시
-      sb.rpc("is_admin").then((r) => { if (unlocked && !r.error && r.data === true) $("adminLink").hidden = false; }, () => {});
-    }
     renderFileInfo(); renderLedger(); renderNet();
     showIdle("카메라를 켜거나 번호를 입력하면 여기에 예약 여부가 표시됩니다.");
     sync();

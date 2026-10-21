@@ -1440,7 +1440,8 @@
       for (const r of rs) {
         let chip = "<span></span>";
         if (d === today) { const [cls, txt] = CHIP[slotState(r.t).state]; chip = `<span class="chip ${cls}">${txt}</span>`; }
-        html += `<div class="row"><span class="t">${esc(slotLabel(r.t))}</span><span><span class="mini-plate">${esc(pretty(r.p))}</span></span>${chip}</div>`;
+        const sl = slotOf(r.t), sc = sl ? " s" + sl.s.slice(0, 2) : "";   // 시간대별 바탕색 (s09·s12·s15)
+        html += `<div class="row${sc}"><span class="t">${esc(slotLabel(r.t))}</span><span><span class="mini-plate">${esc(pretty(r.p))}</span></span>${chip}</div>`;
       }
       html += `</div>`;
     }

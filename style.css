@@ -175,6 +175,18 @@ a.icon-btn { display: inline-flex; align-items: center; text-decoration: none; c
 .chip.before { color: var(--warn); background: var(--warn-soft); }
 .chip.after { color: var(--muted); background: var(--bg); }
 .empty { color: var(--muted); font-size: 14px; padding: 14px 0 4px; margin: 0; }
+/* 예약 현황: 시간대별 바탕색 — 09~12 연두, 12~15 연노랑, 15~18 핑크 */
+:root { --s09: #e4f6d4; --s12: #fff4c2; --s15: #fde1ec; --s09-edge: #b9e29a; --s12-edge: #f1dc7a; --s15-edge: #f4b3cb; }
+@media (prefers-color-scheme: dark) { :root { --s09: #22361b; --s12: #3a3417; --s15: #3f1f2c; --s09-edge: #3d6331; --s12-edge: #6b5e22; --s15-edge: #74384f; } }
+.row.s09, .row.s12, .row.s15 { padding: 7px 10px; margin: 0; }          /* 상자 없이 바탕색 띠만 이어지게 */
+.row.s09 { background: var(--s09); }
+.row.s12 { background: var(--s12); }
+.row.s15 { background: var(--s15); }
+/* 예약 현황 목록의 차량번호: 테두리·흰 바탕 없이 글자만 */
+#ledger .mini-plate { background: none; border: 0; border-radius: 0; padding: 0; color: var(--ink); font-family: var(--body); font-weight: 700; font-size: 19px; letter-spacing: .02em; }
+.slots b.s09 { background: var(--s09); border-color: var(--s09-edge); }
+.slots b.s12 { background: var(--s12); border-color: var(--s12-edge); }
+.slots b.s15 { background: var(--s15); border-color: var(--s15-edge); }
 @media (max-width: 420px) { .row { grid-template-columns: 94px minmax(0, 1fr) auto; } .row .t { font-size: 13px; } .mini-plate { font-size: 16px; padding: 1px 6px; } }
 
 /* 휴대폰 세로: 카메라 바로 아래에 신호가 오도록 순서 재배치 */

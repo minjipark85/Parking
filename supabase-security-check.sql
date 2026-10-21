@@ -36,10 +36,10 @@ union all
 select '4. 공개 함수', fname,
        case when fname in ('slot_availability', 'request_reservation', 'my_reservations', 'cancel_reservation',
                            'apply_date_allowed', 'apply_open_dates', 'apply_upcoming_dates', 'pass_status',
-                           'is_staff', 'is_admin') then '정상' else '확인 필요' end,
+                           'is_staff', 'is_admin', 'log_view') then '정상' else '확인 필요' end,
        case when fname in ('slot_availability', 'request_reservation', 'my_reservations', 'cancel_reservation',
                            'apply_date_allowed', 'apply_open_dates', 'apply_upcoming_dates', 'pass_status',
-                           'is_staff', 'is_admin') then '신청·조회용 (입력 검사 후 필요한 것만 돌려줌)'
+                           'is_staff', 'is_admin', 'log_view') then '신청·조회용 (입력 검사 후 필요한 것만 돌려줌)'
             else '로그인 없이 실행 가능 → 의도한 것이 아니면 revoke' end
   from fn
 union all

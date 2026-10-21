@@ -28,7 +28,7 @@
   function showAdmin(email) {
     $("loginView").hidden = true; $("adminView").hidden = false; $("who").hidden = false;
     $("whoEmail").textContent = email;
-    loadMonth(); loadSummary();
+    loadMonth(); loadSummary(); loadStats();
   }
   // DB 설정(supabase-opendates.sql)을 아직 안 했으면 함수가 없다는 오류가 옴
   function missingSql(e) {
@@ -284,6 +284,40 @@
       }).join("");
     }).catch(function (e) { console.error(e); $("summary").innerHTML = '<p class="muted">불러오지 못했어요.</p>'; });
   }
+
+  // ---------- 접속 현황 ----------
+  var PAGE_NAME = { index: "안내", apply: "신청", pass: "확인증" };
+  function loadStats() {
+    if ($("adminView").hidden || document.hidden) return;
+    sb.rpc("admin_view_stats", { p_days: 7 }).then(function (r) {
+      if (r.error) throw r.error;
+      var d = r.data || {}, days = d.days || [], hours = d.hours || [], today = days[days.length - 1] || {};
+      $("sLive").textContent = d.live || 0;
+      var lp = d.live_pages || {};
+      $("sLivePages").textContent = Object.keys(lp).length ? Object.keys(lp).map(function (k) { return (PAGE_NAME[k] || k) + " " + lp[k]; }).join(" · ") : "최근 5분";
+      $("sViews").textContent = (today.views || 0).toLocaleString();
+      $("sViewPages").textContent = "안내 " + (today.v_index || 0) + " · 신청 " + (today.v_apply || 0) + " · 확인증 " + (today.v_pass || 0);
+      $("sVisitors").textContent = (today.visitors || 0).toLocaleString();
+      var nowH = new Date().getHours(), hmax = Math.max.apply(null, hours.map(function (h) { return h.views || 0; }).concat([1]));
+      $("sHours").innerHTML = hours.map(function (h) {
+        var pct = Math.round(((h.views || 0) / hmax) * 100);
+        return '<div class="hb' + (h.hour === nowH ? " now" : "") + '" title="' + h.hour + '시 · 페이지뷰 ' + (h.views || 0) + ' · 방문자 ' + (h.visitors || 0) + '">' +
+          (h.views ? '<em style="bottom:calc(' + pct + '% + 2px)">' + h.views + '</em>' : "") + '<i style="height:' + pct + '%"></i>' + (h.hour % 3 === 0 ? '<span class="' + (h.hour % 6 === 0 ? "l6" : "l3") + '">' + h.hour + '</span>' : "") + '</div>';
+      }).join("");
+      var dmax = Math.max.apply(null, days.map(function (x) { return x.views || 0; }).concat([1]));
+      $("sDays").innerHTML = days.slice().reverse().map(function (x, i) {
+        var v = String(x.day).slice(0, 10);
+        return '<div class="dayrow' + (i === 0 ? " today" : "") + '"><span>' + md(v) + '</span><span class="bar"><i style="width:' + Math.round(((x.views || 0) / dmax) * 100) + '%"></i></span>' +
+          '<span class="dnum">' + (x.views || 0).toLocaleString() + '회 · ' + (x.visitors || 0).toLocaleString() + '명</span></div>';
+      }).join("");
+      $("statAt").textContent = stamp(new Date().toISOString()) + " 기준 · 1분마다 갱신";
+    }).catch(function (e) {
+      console.error(e);
+      $("statAt").textContent = /PGRST202|Could not find the function|42883/.test((e && (e.message || "")) + (e && e.code || "")) ? "supabase-stats.sql 을 실행하면 보여요" : "불러오지 못했어요";
+    });
+  }
+  setInterval(loadStats, 60000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) loadStats(); });
 
   start();
 })();

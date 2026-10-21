@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=4">
-  <link rel="stylesheet" href="admin.css?v=8">
+  <link rel="stylesheet" href="admin.css?v=13">
 </head>
 <body>
 <div class="page admin">
@@ -99,11 +99,28 @@
       <p class="muted">시간대별 숫자는 <b>예약 건수 / 정원</b>이에요.</p>
       <div id="summary" class="summary-list"><p class="muted">불러오는 중…</p></div>
     </section>
+
+    <section class="step" aria-labelledby="statTitle">
+      <div class="stat-head">
+        <h2 id="statTitle">접속 현황</h2>
+        <span class="muted" id="statAt"></span>
+      </div>
+      <div class="tiles">
+        <div class="tile live"><span class="t-label"><i class="dot-live" aria-hidden="true"></i>지금 보는 사람</span><b id="sLive">–</b><span class="t-sub" id="sLivePages">최근 5분</span></div>
+        <div class="tile"><span class="t-label">오늘 페이지뷰</span><b id="sViews">–</b><span class="t-sub" id="sViewPages"></span></div>
+        <div class="tile"><span class="t-label">오늘 방문자</span><b id="sVisitors">–</b><span class="t-sub">기기 기준</span></div>
+      </div>
+      <h3 class="stat-sub">오늘 시간대별 페이지뷰</h3>
+      <div class="hours" id="sHours" aria-label="오늘 시간대별 페이지뷰"></div>
+      <h3 class="stat-sub">최근 7일</h3>
+      <div class="days" id="sDays"></div>
+      <p class="muted small">안내·예약 신청·예약확인증 페이지를 연 횟수예요. 이름·연락처·IP는 저장하지 않고, 기록은 90일 뒤 지워져요.</p>
+    </section>
   </main>
 </div>
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=8"></script>
+<script src="admin.js?v=11"></script>
 </body>
 </html>

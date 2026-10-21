@@ -89,3 +89,31 @@ button.cap-save { width: 100%; }
 .sum-row .when2 { font-size: 13px; font-weight: 700; }
 .sum-row .when2.open { color: var(--ok); } .sum-row .when2.sched { color: var(--warn); }
 .sum-row .meta { font-size: 13px; color: var(--muted); }
+
+/* 접속 현황 */
+.stat-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.stat-head .muted { font-size: 13px; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; background: var(--bg); min-width: 0; }
+.tile .t-label { font-size: 13px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.tile b { font-family: var(--mono); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.tile .t-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.live { border-color: var(--ok); background: var(--ok-soft); }
+.tile.live b { color: var(--ok); }
+.dot-live { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: livepulse 1.6s ease-in-out infinite; }
+@keyframes livepulse { 50% { opacity: .3; } }
+.stat-sub { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+.hours { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; align-items: end; height: 120px; padding-top: 16px; }
+.hours .hb { position: relative; display: grid; align-items: end; height: 100%; }
+.hours .hb i { display: block; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
+.hours .hb.now i { background: var(--ok); }
+.hours .hb span { white-space: nowrap; z-index: 1; position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.hours .hb em { position: absolute; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10px; font-weight: 700; color: var(--ink); font-family: var(--mono); white-space: nowrap; }
+.hours { margin-bottom: 18px; }
+.days { display: grid; gap: 6px; }
+.dayrow { display: grid; grid-template-columns: 76px minmax(0, 1fr) max-content; align-items: center; gap: 10px; font-size: 14px; }
+.dayrow .bar { height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; }
+.dayrow .bar i { display: block; height: 100%; background: var(--accent); border-radius: 7px; }
+.dayrow .dnum { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+.dayrow.today { font-weight: 700; }
+@media (max-width: 480px) { .tile b { font-size: 24px; } .hours .hb span { font-size: 10px; } .hours .hb span.l3 { display: none; } .hours .hb em { display: none; } .tile { padding: 10px; } }

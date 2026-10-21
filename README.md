@@ -320,6 +320,7 @@ window.APP_CONFIG = {
 | `pass.html`, `pass.css`, `pass.js` | 방문자용 실시간 예약확인증 |
 | `supabase-security-fix.sql` | 점검에서 관리자 함수가 '확인 필요'로 나올 때 한 번 실행 (로그인 없이 실행 권한 회수) |
 | `stats.js`, `supabase-stats.sql` | 접속 수 세기(페이지) / 접속 기록 표·함수(DB) |
+| `supabase-timezone.sql` | DB 기본 시간대를 한국 시간으로 (Table Editor 시각이 +09로 보임, 한 번만 실행) |
 | `supabase-security-check.sql` | 보안 점검 (실행하면 정상/확인 필요 표가 나옴, 아무것도 바꾸지 않음) |
 | `supabase-pass.sql` | 확인증 조회 함수(정기 차량·예약 + 서버 시각) |
 | `supabase-opendates.sql` | 관리자 지정(`is_admin`) + 예약 개설일·날짜별 정원 관리 함수 |

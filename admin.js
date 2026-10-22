@@ -342,14 +342,14 @@
   setInterval(loadStats, 60000);
 
   // ---------- 여러 번 예약 (보기·편집 관리자 모두) ----------
-  var repBy = "phone", repData = null, repShow = 30;
+  var repBy = "phone", repData = null, repShow = 0;   // 처음엔 요약만, "더 보기"로 목록 펼침
   var SLOT_CLS = { "09:00": "s09", "12:00": "s12", "15:00": "s15" };
   function loadRepeat() {
     if ($("adminView").hidden) return;
     $("repAt").textContent = "불러오는 중…";
     sb.rpc("admin_repeat_bookers", { p_by: repBy, p_min: +$("repMin").value }).then(function (r) {
       if (r.error) throw r.error;
-      repData = r.data || {}; repShow = 30; renderRepeat();
+      repData = r.data || {}; repShow = repShow > 0 ? 30 : 0; renderRepeat();
       $("repAt").textContent = stamp(new Date().toISOString()) + " 기준";
     }).catch(function (e) {
       console.error(e); repData = null;
@@ -363,6 +363,7 @@
     $("repSum").innerHTML = (repBy === "plate" ? "예약된 차량 " : "신청한 사람 ") + "<b>" + (d.total || 0).toLocaleString() + "</b>" + unit +
       " 중 " + min + "회 이상 <b>" + (d.count || 0).toLocaleString() + "</b>" + unit + (d.count > rows.length ? " (많은 순 " + rows.length + unit + "까지 표시)" : "");
     if (!rows.length) { $("repList").innerHTML = '<p class="muted">' + min + "회 이상 예약한 " + (repBy === "plate" ? "차량이" : "사람이") + " 없어요.</p>"; $("repMore").hidden = true; return; }
+    $("repList").hidden = !repShow;
     $("repList").innerHTML = rows.slice(0, repShow).map(function (x) {
       var who = repBy === "plate"
         ? '<span class="pl">' + esc(x.plate) + "</span>" + (x.phones > 1 ? '<span class="sub">연락처 ' + x.phones + "개로 예약</span>" : "")
@@ -392,7 +393,7 @@
   });
   $("repMin").addEventListener("change", loadRepeat);
   $("repRefresh").addEventListener("click", loadRepeat);
-  $("repMore").addEventListener("click", function () { repShow += 50; renderRepeat(); });
+  $("repMore").addEventListener("click", function () { repShow = repShow ? repShow + 50 : 30; renderRepeat(); });
 
   // 1분마다 아직 관리자로 인정되는지 확인 (전체 로그아웃·권한 변경 시 로그인 화면으로)
   setInterval(function () {

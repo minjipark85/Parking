@@ -3,6 +3,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var pad = function (n) { return String(n).padStart(2, "0"); };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]; }); };
   var ymd = function (d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
   var parseD = function (s) { var p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); };
   var DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -63,7 +64,10 @@
       if (!s) return showLogin();
       return isAdmin().then(function (ok) {
         if (ok) showAdmin(s.user.email);
-        else showLogin("관리자 권한이 없는 계정(" + s.user.email + ")이에요. Supabase Table Editor → staff_emails 에서 이 계정의 is_admin 을 체크하거나, 관리자 계정으로 로그인하세요.");
+        else {                                    // 전체 로그아웃됐거나 관리자가 아닌 계정
+          sb.auth.signOut({ scope: "local" }).catch(function () {});
+          showLogin("로그인이 해제됐거나 관리자 권한이 없는 계정(" + s.user.email + ")이에요. 다시 로그인해 주세요.");
+        }
       });
     }).catch(function (e) { console.error(e); showLogin(missingSql(e) ? SQL_MSG : "인터넷 연결을 확인해 주세요."); });
   }
@@ -336,6 +340,117 @@
     });
   }
   setInterval(loadStats, 60000);
+
+  // 1분마다 아직 관리자로 인정되는지 확인 (전체 로그아웃·권한 변경 시 로그인 화면으로)
+  setInterval(function () {
+    if ($("adminView").hidden || document.hidden) return;
+    isAdmin().then(function (ok) {
+      if (ok) return checkEditor().then(function (e) { if (e !== canEdit) { canEdit = e; applyRole(); } });
+      sb.auth.signOut({ scope: "local" }).catch(function () {});
+      showLogin("로그인이 해제됐어요. 다시 로그인해 주세요. (전체 로그아웃 또는 권한 변경)");
+    }).catch(function () {});
+  }, 60000);
+
+  // ---------- 관리 도구: CSV 일괄 등록 ----------
+  var csvRows = null;
+  function decodeText(buf) {
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+    catch (e) { try { return new TextDecoder("euc-kr").decode(buf); } catch (e2) { return new TextDecoder().decode(buf); } }
+  }
+  var normP = function (s) { return String(s || "").replace(/[\s\-·.]/g, "").toUpperCase(); };
+  var PLATE_RE = /^([가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
+  function csvDate(s) { var m = String(s).trim().match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]) : null; }
+  function csvSlot(s) {                                   // 09:00 / 9 / 12:00~15:00 / 13:30 → 시간대 시작 시각
+    var m = String(s).trim().match(/^(\d{1,2})(?::(\d{2}))?/); if (!m) return null;
+    var h = +m[1];
+    return h >= 9 && h < 12 ? "09:00" : h >= 12 && h < 15 ? "12:00" : h >= 15 && h < 18 ? "15:00" : null;
+  }
+  function parseCsv(text) {
+    var out = [], bad = [];
+    text.replace(/^\uFEFF/, "").split(/\r?\n/).forEach(function (line, i) {
+      if (!line.trim()) return;
+      var cols = line.split(/[,\t;]/).map(function (c) { return c.replace(/^"|"$/g, "").trim(); });
+      if (/^정기/.test(cols[0])) {
+        var pi = -1; for (var k = 1; k < cols.length; k++) if (PLATE_RE.test(normP(cols[k]))) { pi = k; break; }
+        if (pi < 0) { bad.push(i + 1); return; }
+        out.push({ kind: "reg", line: i + 1, plate: normP(cols[pi]), memo: cols.slice(pi + 1).filter(Boolean).join(" "), until: cols[1] && pi !== 1 ? csvDate(cols[1]) || "" : "" });
+        return;
+      }
+      var dt = cols.length >= 3 ? csvDate(cols[0]) : null, sl = cols.length >= 3 ? csvSlot(cols[1]) : null, p = cols.length >= 3 ? normP(cols[2]) : "";
+      if (!dt || !sl || !PLATE_RE.test(p)) { if (i > 0) bad.push(i + 1); return; }   // 첫 줄(제목)은 조용히 건너뜀
+      out.push({ kind: "res", line: i + 1, date: dt, slot: sl, plate: p });
+    });
+    return { rows: out, bad: bad };
+  }
+  function disarmCsv() { var b = $("csvImport"); b.classList.remove("arm"); if (csvRows) b.textContent = "DB에 등록 (" + csvSummary(csvRows) + ")"; }
+  function csvSummary(rows) {
+    var r = rows.filter(function (x) { return x.kind === "res"; }).length, g = rows.length - r;
+    return [r ? "예약 " + r + "건" : "", g ? "정기 " + g + "대" : ""].filter(Boolean).join(" · ");
+  }
+  $("csvFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0]; e.target.value = "";
+    $("csvError").textContent = ""; $("csvResult").textContent = "";
+    if (!f) return;
+    f.arrayBuffer().then(function (buf) {
+      var r = parseCsv(decodeText(buf));
+      csvRows = r.rows;
+      if (!csvRows.length) { $("csvPreview").hidden = true; $("csvImport").hidden = true; $("csvError").textContent = "읽을 수 있는 줄이 없어요. 예약일자,예약시간,차량번호 순서인지 확인해 주세요."; return; }
+      var res = csvRows.filter(function (x) { return x.kind === "res"; }), dates = res.map(function (x) { return x.date; }).sort();
+      var html = "<div><b>" + esc(f.name) + "</b> — " + csvSummary(csvRows) + (dates.length ? " · 날짜 " + md(dates[0]) + (dates[0] !== dates[dates.length - 1] ? " ~ " + md(dates[dates.length - 1]) : "") : "") + "</div>";
+      if (r.bad.length) html += '<div class="bad">읽지 못한 줄 ' + r.bad.length + "개: " + r.bad.slice(0, 12).join(", ") + (r.bad.length > 12 ? " …" : "") + " (등록되지 않아요)</div>";
+      html += "<table>" + csvRows.slice(0, 5).map(function (x) {
+        return "<tr><td>" + x.line + "줄</td><td>" + (x.kind === "res" ? md(x.date) + " " + x.slot : "정기" + (x.until ? " ~" + x.until : "")) + "</td><td>" + esc(x.plate) + "</td><td>" + esc(x.memo || "") + "</td></tr>";
+      }).join("") + "</table>" + (csvRows.length > 5 ? '<div class="muted small">… 외 ' + (csvRows.length - 5) + "줄</div>" : "");
+      $("csvPreview").innerHTML = html; $("csvPreview").hidden = false;
+      $("csvImport").hidden = false; disarmCsv();
+    }).catch(function (er) { console.error(er); $("csvError").textContent = "파일을 읽지 못했어요. CSV 파일인지 확인해 주세요."; });
+  });
+  $("csvImport").addEventListener("click", function () {
+    var b = this; if (!csvRows || !csvRows.length) return;
+    if (!b.classList.contains("arm")) { b.classList.add("arm"); b.textContent = "정말 등록 (" + csvSummary(csvRows) + ")"; setTimeout(function () { if (b.classList.contains("arm")) disarmCsv(); }, 5000); return; }
+    b.disabled = true; b.classList.remove("arm"); b.textContent = "등록하는 중…";
+    var chunks = []; for (var i = 0; i < csvRows.length; i += 2000) chunks.push(csvRows.slice(i, i + 2000));
+    var tot = { res_added: 0, res_dup: 0, reg_added: 0, reg_updated: 0, bad: [], bad_count: 0 };
+    chunks.reduce(function (p, ch) {
+      return p.then(function () {
+        return sb.rpc("admin_import", { p_rows: ch }).then(function (r) {
+          if (r.error) throw r.error;
+          var x = r.data || {};
+          ["res_added", "res_dup", "reg_added", "reg_updated", "bad_count"].forEach(function (k) { tot[k] += x[k] || 0; });
+          tot.bad = tot.bad.concat(x.bad || []);
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      var msg = "등록했어요 · 예약 " + tot.res_added + "건" + (tot.res_dup ? " (같은 날 이미 예약된 차량 " + tot.res_dup + "건은 건너뜀)" : "") +
+        (tot.reg_added || tot.reg_updated ? " · 정기 차량 새로 " + tot.reg_added + "대, 수정 " + tot.reg_updated + "대" : "") +
+        (tot.bad_count ? " · 등록 못 한 줄 " + tot.bad_count + "개: " + tot.bad.slice(0, 10).join(", ") : "");
+      $("csvResult").textContent = msg; csvRows = null; $("csvImport").hidden = true; $("csvPreview").hidden = true;
+      loadMonth(); loadSummary();
+    }).catch(function (er) {
+      console.error(er);
+      $("csvError").textContent = missingSql(er) ? "DB 업데이트(supabase-update-1023.sql)를 먼저 실행해 주세요." : "등록하지 못했어요. 편집 권한과 인터넷 연결을 확인해 주세요.";
+    }).then(function () { b.disabled = false; if (csvRows) disarmCsv(); });
+  });
+
+  // ---------- 관리 도구: 전체 로그아웃 ----------
+  $("logoutAll").addEventListener("click", function () {
+    var b = this;
+    if (!b.classList.contains("arm")) {
+      b.classList.add("arm"); b.textContent = "정말 모두 로그아웃 (나 포함)";
+      setTimeout(function () { b.classList.remove("arm"); b.textContent = "전체 로그아웃"; }, 5000);
+      return;
+    }
+    b.disabled = true; $("logoutAllError").textContent = "";
+    sb.rpc("admin_logout_all").then(function (r) {
+      if (r.error) throw r.error;
+      return sb.auth.signOut({ scope: "local" }).catch(function () {});
+    }).then(function () {
+      showLogin("전체 로그아웃했어요. 1분 안에 모든 기기가 로그인 화면으로 돌아가요. 계속 쓰려면 다시 로그인해 주세요.");
+    }).catch(function (er) {
+      console.error(er);
+      $("logoutAllError").textContent = missingSql(er) ? "DB 업데이트(supabase-update-1023.sql)를 먼저 실행해 주세요." : "실행하지 못했어요. 편집 권한과 인터넷 연결을 확인해 주세요.";
+    }).then(function () { b.disabled = false; b.classList.remove("arm"); b.textContent = "전체 로그아웃"; });
+  });
   document.addEventListener("visibilitychange", function () { if (!document.hidden) loadStats(); });
 
   start();

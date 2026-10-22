@@ -31,6 +31,7 @@
     $("setupNotice").textContent = "지금은 예약 신청을 받을 수 없어요. (관리자: config.js에 Supabase 연결 정보를 넣어 주세요)";
   }
 
+  var CANCEL_STARTED = "예약 시간이 시작된 후에는 취소할 수 없어요.";
   var ERR = {
     full: "방금 이 시간대가 마감됐어요. 다른 시간대를 골라 주세요.",
     duplicate: "이미 예약이 완료되었습니다.",
@@ -266,8 +267,12 @@
       if (res.error) throw res.error;
       if (!res.data.length) { $("mineList").innerHTML = '<p class="muted">앞으로 예정된 예약이 없어요. 차량번호와 연락처가 신청할 때와 같은지 확인해 주세요.</p>'; return; }
       $("mineList").innerHTML = res.data.map(function (r) {
-        return '<div class="my-item" data-id="' + esc(r.id) + '"><span class="when">' + dateLabel(String(r.reserve_date)) + ' · ' + slotLabel(r.reserve_time) + '</span>' +
-          '<span class="acts"><button type="button" class="to-pass">확인증</button><button type="button" class="cancel">취소</button></span>' +
+        // 예약한 시간대가 시작됐으면 취소 버튼 대신 안내
+        var startAt = new Date(String(r.reserve_date).slice(0, 10) + "T" + String(r.reserve_time).slice(0, 5) + ":00+09:00");
+        var started = Date.now() >= startAt.getTime();
+        return '<div class="my-item' + (started ? " started" : "") + '" data-id="' + esc(r.id) + '"><span class="when">' + dateLabel(String(r.reserve_date)) + ' · ' + slotLabel(r.reserve_time) + '</span>' +
+          '<span class="acts"><button type="button" class="to-pass">확인증</button>' + (started ? '<span class="no-cancel" title="' + CANCEL_STARTED + '">취소 불가</span>' : '<button type="button" class="cancel">취소</button>') + '</span>' +
+          (started ? '<span class="started-note">' + CANCEL_STARTED + '</span>' : '') +
           '<span class="meta"><span class="mini-plate" style="font-size:15px">' + esc(r.plate) + '</span> · 예약번호 <span class="mono">' + esc(r.code) + '</span></span></div>';
       }).join("");
     }).catch(function (e) { console.error(e); $("mineError").textContent = "조회하지 못했어요. 잠시 후 다시 시도해 주세요."; })
@@ -285,9 +290,12 @@
     var item = b.closest(".my-item");
     b.disabled = true; b.textContent = "취소 중…";
     sb.rpc("cancel_reservation", { p_id: item.dataset.id, p_phone: digits($("mPhone").value) }).then(function (res) {
-      if (res.error || !res.data || !res.data.ok) throw res.error || new Error("not cancelled");
+      if (res.error) throw res.error;
+      var d = res.data || {};
+      if (d.error === "started") { b.replaceWith(Object.assign(document.createElement("span"), { className: "no-cancel", textContent: "취소 불가" })); item.classList.add("started"); $("mineError").textContent = CANCEL_STARTED; return; }
+      if (!d.ok) throw new Error("not cancelled");
       item.classList.add("gone"); b.textContent = "취소됨";
-    }).catch(function (e) { console.error(e); b.disabled = false; b.classList.remove("arm"); b.textContent = "취소"; $("mineError").textContent = "취소하지 못했어요. 지난 예약은 취소할 수 없어요."; });
+    }).catch(function (e) { console.error(e); b.disabled = false; b.classList.remove("arm"); b.textContent = "취소"; $("mineError").textContent = "취소하지 못했어요. 잠시 후 다시 시도해 주세요."; });
   });
 
   // ---------- 시작 ----------

@@ -8,8 +8,8 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="apply.css?v=4">
-  <link rel="stylesheet" href="admin.css?v=14">
+  <link rel="stylesheet" href="apply.css?v=8">
+  <link rel="stylesheet" href="admin.css?v=15">
 </head>
 <body>
 <div class="page admin">
@@ -97,6 +97,27 @@
       </div>
     </section>
 
+    <section class="step tools editor-only" aria-labelledby="toolTitle">
+      <h2 id="toolTitle">관리 도구 <span class="muted-in">편집 권한</span></h2>
+
+      <div class="tool">
+        <h3>예약·정기 차량 일괄 등록 (CSV)</h3>
+        <p class="muted small">한 줄에 하나씩 — <b>예약</b>: 예약일자,예약시간,차량번호 (예: <code>2026-10-24,09:00,12가3456</code>) · <b>정기 차량</b>: 첫 칸에 "정기" (예: <code>정기,,11가1111,관리사무소</code>, 종료일이 있으면 <code>정기,2026-12-31,11가1111,메모</code>) · 엑셀에서 "CSV(쉼표로 분리)"로 저장한 파일도 돼요.</p>
+        <label class="file-btn"><span>CSV 파일 고르기</span><input type="file" id="csvFile" accept=".csv,text/csv,text/plain"></label>
+        <div class="csv-preview" id="csvPreview" hidden></div>
+        <button type="button" class="primary" id="csvImport" hidden>DB에 등록</button>
+        <p class="form-error" id="csvError" role="alert"></p>
+        <p class="toast" id="csvResult" role="status"></p>
+      </div>
+
+      <div class="tool danger-zone">
+        <h3>전체 로그아웃</h3>
+        <p class="muted small">확인 앱·관리자 페이지에 로그인된 <b>모든 기기(나 포함)</b>를 1분 안에 로그아웃시켜요. 기기 분실, 담당자 교대 때 쓰세요. 계정은 그대로라 다시 로그인하면 계속 쓸 수 있어요.</p>
+        <button type="button" id="logoutAll">전체 로그아웃</button>
+        <p class="form-error" id="logoutAllError" role="alert"></p>
+      </div>
+    </section>
+
     <section class="step" aria-labelledby="sumTitle">
       <h2 id="sumTitle">앞으로 열려 있는 날짜</h2>
       <p class="muted">시간대별 숫자는 <b>예약 건수 / 정원</b>이에요.</p>
@@ -124,6 +145,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=12"></script>
+<script src="admin.js?v=13"></script>
 </body>
 </html>

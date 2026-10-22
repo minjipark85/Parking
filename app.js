@@ -49,11 +49,15 @@
   // =========================================================
   //  예약 데이터 — 기기에 저장해 두고, 조회는 항상 기기 안에서
   //  · DB(Supabase)가 연결돼 있으면 온라인일 때 1분마다 받아서 저장
-  //  · 예약 파일(CSV)을 불러와 저장할 수도 있음 (완전 오프라인 현장)
+  //  · 예약 일괄 등록(CSV)은 관리자(편집) 페이지에서 DB로 바로 넣음
   //  · 인터넷이 끊겨도 마지막으로 저장한 예약으로 계속 판정
   // =========================================================
   const STORE_KEY = "plate-reservation-store-v1";
   const store = loadStore();
+  if (store.file.length || store.regFile.length) {          // 예전 버전에서 기기에 불러온 CSV 예약은 지움 (이제 DB만 기준)
+    store.file = []; store.regFile = []; store.fileName = ""; store.fileAt = 0;
+    try { localStorage.setItem("plate-reservation-store-v1", JSON.stringify(store)); } catch (e) {}
+  }
   function loadStore() {
     try {
       const v = JSON.parse(localStorage.getItem(STORE_KEY));
@@ -110,7 +114,7 @@
     syncing = true; renderNet();
     try {
       // 직원 명단에서 빠졌거나 로그아웃된 계정이면 바로 잠금 (인터넷 오류면 아래 catch로)
-      if (!(await checkStaff())) { syncing = false; await signOutAll("직원 명단에 없는 계정이라 로그아웃했어요. 관리자에게 문의하세요."); return; }
+      if (!(await checkStaff())) { syncing = false; await signOutAll("로그인이 해제됐어요. 다시 로그인해 주세요. (전체 로그아웃 또는 직원 명단 변경)"); return; }
       const from = new Date(); from.setDate(from.getDate() - 1);   // 어제부터 앞으로의 예약만 저장
       const rows = [];
       for (let page = 0; page < 20; page++) {                       // 최대 20,000건
@@ -162,7 +166,7 @@
     const count = allRows().filter((r) => r.d >= todayStr()).length + "건" + (regN ? ` · 정기 ${regN}대` : "");
     if (!sb) {
       const has = store.file.length || store.regFile.length;
-      setNet(has ? `기기 저장 예약 ${count} (파일)` : "예약 파일을 불러오세요", has ? "ok" : "warn");
+      setNet("DB 연결 정보가 없어요 (config.js)", "warn");
       return;
     }
     if (syncing) { setNet("예약 받는 중…", "info"); return; }
@@ -176,7 +180,7 @@
 
   if (!sb) {
     $("setupNotice").hidden = false;
-    $("setupNotice").textContent = "DB 연결 없이 쓰는 중이에요. 아래 [예약 파일 불러오기]로 CSV 예약 파일을 넣으면 인터넷 없이 확인할 수 있어요.";
+    $("setupNotice").textContent = "DB 연결 정보(config.js)가 없어 예약을 받아 올 수 없어요. 번호판 인식만 시험할 수 있어요.";
   }
 
   // ---------- 시계 ----------
@@ -225,7 +229,7 @@
     const expiredReg = allRegs().find((r) => regMatch(r, q) && !regActive(r, today0));
 
     if (!rows.length && !allRegs().length) {
-      showResult("info", `<div class="verdict"><span class="dot"></span>저장된 예약·정기 차량이 없어요</div><div class="sub">${sb ? "인터넷에 연결해 예약을 한 번 받아 오세요." : "[예약 파일 불러오기]로 예약 파일을 넣어 주세요."}</div>`);
+      showResult("info", `<div class="verdict"><span class="dot"></span>저장된 예약·정기 차량이 없어요</div><div class="sub">${sb ? "인터넷에 연결해 예약을 한 번 받아 오세요." : "DB 연결 정보(config.js)를 확인해 주세요."}</div>`);
       return;
     }
 
@@ -1307,91 +1311,6 @@
     }
   });
 
-  // =========================================================
-  //  예약 파일(CSV) 불러오기
-  //  형식: 예약일자,예약시간,차량번호  (첫 줄 제목은 있어도 되고 없어도 됨)
-  //  예)   2026-10-20,09:00,12가3456
-  //        2026.10.20,12:00~15:00,123나 4567
-  //  엑셀에서 "CSV(쉼표로 분리)"로 저장한 파일(한글 인코딩)도 읽음
-  // =========================================================
-  function decodeText(buf) {
-    try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
-    catch (e) { try { return new TextDecoder("euc-kr").decode(buf); } catch (e2) { return new TextDecoder().decode(buf); } }
-  }
-  function parseDate(s) {
-    const m = String(s).trim().match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-    if (!m) return null;
-    return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
-  }
-  function parseTime(s) {
-    const m = String(s).trim().match(/^(\d{1,2})(?::(\d{2}))?/);
-    if (!m) return null;
-    const slot = slotOf(`${pad(+m[1])}:${m[2] || "00"}`);
-    return slot ? slot.s : null;          // 시간대 시작 시각으로 맞춤
-  }
-  // 정기 차량 줄: 첫 칸에 "정기"  예) 정기,,12가3456,관리사무소   (기간: 정기,2026-12-31,12가3456,관리사무소 → 그날까지)
-  function parseCsv(text) {
-    const rows = [], regs = [], bad = [];
-    text.replace(/^﻿/, "").split(/\r?\n/).forEach((line, i) => {
-      if (!line.trim()) return;
-      const cols = line.split(/[,\t;]/).map((c) => c.replace(/^"|"$/g, "").trim());
-      if (/^정기/.test(cols[0])) {
-        const pi = cols.findIndex((c, k) => k > 0 && PLATE_RE.test(norm(c)));
-        if (pi < 0) { bad.push(i + 1); return; }
-        const until = cols[1] && pi !== 1 ? parseDate(cols[1]) || "" : "";
-        regs.push({ p: norm(cols[pi]), memo: cols.slice(pi + 1).filter(Boolean).join(" "), from: "", until, src: "file" });
-        return;
-      }
-      const d = cols.length >= 3 ? parseDate(cols[0]) : null;
-      const t = cols.length >= 3 ? parseTime(cols[1]) : null;
-      const p = cols.length >= 3 ? norm(cols[2]) : "";
-      if (!d || !t || !PLATE_RE.test(p)) { if (i > 0) bad.push(i + 1); return; }   // 첫 줄(제목)은 조용히 건너뜀
-      rows.push({ d, t, p, src: "file" });
-    });
-    return { rows, regs, bad };
-  }
-
-  $("csvInput").addEventListener("change", async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!file) return;
-    const msg = $("fileMsg");
-    try {
-      const { rows, regs, bad } = parseCsv(decodeText(await file.arrayBuffer()));
-      if (!rows.length && !regs.length) { msg.className = "file-msg err"; msg.textContent = "읽을 수 있는 예약이 없어요. 예약일자,예약시간,차량번호 순서인지 확인하세요."; return; }
-      store.file = rows; store.regFile = regs; store.fileName = file.name; store.fileAt = Date.now();
-      saveStore();
-      msg.className = "file-msg ok";
-      msg.textContent = `${file.name}에서 예약 ${rows.length}건${regs.length ? `, 정기 차량 ${regs.length}대를` : "을"} 저장했어요.` + (bad.length ? ` (읽지 못한 줄: ${bad.slice(0, 8).join(", ")}${bad.length > 8 ? " 외" : ""})` : "");
-      renderFileInfo(); renderLedger(); renderNet();
-      if (lastQuery) check(true);
-    } catch (err) {
-      console.error(err);
-      msg.className = "file-msg err"; msg.textContent = "파일을 읽지 못했어요. CSV 파일인지 확인하세요.";
-    }
-  });
-
-  $("clearFile").addEventListener("click", () => {
-    const b = $("clearFile");
-    if (!b.classList.contains("arm")) {
-      b.classList.add("arm"); b.textContent = "정말 지우기";
-      setTimeout(() => { b.classList.remove("arm"); b.textContent = "파일 예약 지우기"; }, 4000);
-      return;
-    }
-    store.file = []; store.regFile = []; store.fileName = ""; store.fileAt = 0; saveStore();
-    b.classList.remove("arm"); b.textContent = "파일 예약 지우기";
-    $("fileMsg").className = "file-msg"; $("fileMsg").textContent = "파일에서 불러온 예약을 지웠어요.";
-    renderFileInfo(); renderLedger(); renderNet();
-  });
-
-  function renderFileInfo() {
-    const has = store.file.length || store.regFile.length;
-    const summary = `${store.file.length}건${store.regFile.length ? ` · 정기 ${store.regFile.length}대` : ""}`;
-    $("fileCount").textContent = has ? `· ${summary}` : "";
-    $("clearFile").hidden = !has;
-    $("fileInfo").textContent = has ? `불러온 파일: ${store.fileName} · ${summary} · ${fmtStamp(store.fileAt)}` : "";
-  }
-
   // ---------- 예약 현황 (보기 전용) ----------
   let view = "today";
   const CHIP = { now: ["now", "진행 중"], before: ["before", "대기"], after: ["after", "종료"], other: ["after", "시간대 밖"] };
@@ -1405,7 +1324,7 @@
       let regs = allRegs().slice().sort((a, b) => a.p.localeCompare(b.p));
       if (f) regs = regs.filter((r) => r.p.includes(f));
       if (!regs.length) {
-        box.innerHTML = `<p class="empty">${allRegs().length ? "조건에 맞는 정기 차량이 없어요." : (sb ? "등록된 정기 차량이 없어요. Supabase의 regular_vehicles 표에 넣으면 여기에 보입니다." : "정기 차량이 없어요. 예약 파일에 '정기' 줄을 넣어 불러오세요.")}</p>`;
+        box.innerHTML = `<p class="empty">${allRegs().length ? "조건에 맞는 정기 차량이 없어요." : "등록된 정기 차량이 없어요. 관리자(편집) 페이지의 CSV 일괄 등록이나 Supabase의 regular_vehicles 표에 넣으면 여기에 보입니다."}</p>`;
         return;
       }
       const total = regs.length, more = total > LIST_MAX;
@@ -1424,7 +1343,7 @@
     if (!list.length) {
       const none = !allRows().length;
       box.innerHTML = `<p class="empty">${none
-        ? (sb ? "아직 받은 예약이 없어요. 인터넷에 연결되면 자동으로 받아 옵니다." : "아직 예약이 없어요. [예약 파일 불러오기]로 CSV 파일을 넣어 주세요.")
+        ? "아직 받은 예약이 없어요. 인터넷에 연결되면 자동으로 받아 옵니다."
         : (view === "today" ? "오늘 예약이 없어요." : "조건에 맞는 예약이 없어요.")}</p>`;
       return;
     }
@@ -1499,7 +1418,7 @@
     $("loginView").hidden = true;
     $("account").hidden = !email;
     $("accountEmail").textContent = email ? email + (offline ? " · 오프라인" : "") : "";
-    renderFileInfo(); renderLedger(); renderNet();
+    renderLedger(); renderNet();
     showIdle("카메라를 켜거나 번호를 입력하면 여기에 예약 여부가 표시됩니다.");
     sync();
   }
@@ -1511,7 +1430,6 @@
 
   async function initAuth() {
     if (!sb) {                               // DB 없이(CSV만) 쓰는 경우는 로그인 없음
-      if (!store.file.length) $("fileBox").open = true;
       unlock("", false);
       return;
     }
@@ -1526,7 +1444,7 @@
     if (session) {
       try {
         if (await checkStaff()) { writeAuth({ email: session.user.email, at: Date.now() }); unlock(session.user.email, false); }
-        else await signOutAll("직원 명단에 없는 계정이에요. 관리자에게 등록을 요청하세요.");
+        else await signOutAll("로그인이 해제됐어요. 다시 로그인해 주세요. (전체 로그아웃 또는 직원 명단 변경)");
       } catch (e) {                          // 인터넷이 안 되면 마지막 확인 기록으로 계속 사용
         if (saved) unlock(saved.email, true); else lock("인터넷에 연결된 상태에서 로그인해 주세요.");
       }

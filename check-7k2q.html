@@ -113,19 +113,6 @@
           <input id="filter" type="search" placeholder="번호로 찾기" aria-label="예약 목록에서 번호로 찾기">
         </div>
         <div id="ledger" class="ledger"><p class="empty">예약 목록을 불러오는 중…</p></div>
-        <details class="file-box" id="fileBox">
-          <summary>예약 파일 (CSV) <span id="fileCount"></span></summary>
-          <div class="file-actions">
-            <label class="btn small" id="csvBtn">
-              <span>예약 파일 불러오기 (CSV)</span>
-              <input id="csvInput" type="file" accept=".csv,text/csv,text/plain">
-            </label>
-            <button type="button" class="small" id="clearFile" hidden>파일 예약 지우기</button>
-          </div>
-          <p class="file-info" id="fileInfo"></p>
-          <p class="file-msg" id="fileMsg" role="status"></p>
-          <p class="file-help">형식: 예약일자,예약시간,차량번호 — 예) 2026-10-20,09:00,12가3456 · 정기 차량은 첫 칸에 "정기" — 예) 정기,,11가1111,관리사무소 (엑셀에서 CSV로 저장한 파일도 됩니다)</p>
-        </details>
       </div>
     </section>
   </main>
@@ -135,6 +122,6 @@
 <script src="supabase.js"></script>
 <script src="tesseract.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

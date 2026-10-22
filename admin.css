@@ -124,3 +124,18 @@ button.cap-save { width: 100%; }
 .role-badge.view { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
 body.viewonly .actions, body.viewonly .quick { display: none; }
 body.viewonly .day { cursor: default; }
+
+/* 관리 도구 (편집 권한만) */
+body.viewonly .editor-only { display: none; }
+.tools .tool { display: grid; gap: 10px; border-top: 1px dashed var(--line); padding-top: 14px; }
+.tools .tool:first-of-type { border-top: 0; padding-top: 0; }
+.tools h3 { margin: 0; font-size: 16px; }
+.tools code { font-family: var(--mono); font-size: 12px; background: var(--bg); padding: 1px 5px; border-radius: 5px; white-space: nowrap; }
+.file-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 18px; border: 1px solid var(--accent); color: var(--accent); border-radius: 12px; font-weight: 700; cursor: pointer; background: var(--surface); justify-self: start; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.csv-preview { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; display: grid; gap: 6px; background: var(--bg); }
+.csv-preview table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.csv-preview td { padding: 3px 6px; border-top: 1px solid var(--line); font-family: var(--mono); white-space: nowrap; }
+.csv-preview .bad { color: var(--bad); font-weight: 600; }
+#csvImport.arm, #logoutAll.arm { background: var(--bad); border-color: var(--bad); color: #fff; }
+.danger-zone #logoutAll { justify-self: start; color: var(--bad); border-color: var(--bad); }

@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>중복 예약 상세</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="apply.css?v=8">
+  <link rel="stylesheet" href="admin.css?v=16">
+  <style>
+    .dup .tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .dup .tile.warn { border-color: var(--bad); }
+    .dup .tile.warn b { color: var(--bad); }
+    .dist { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+    .dist span { padding: 3px 9px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); white-space: nowrap; }
+    .dist b { font-family: var(--mono); }
+    .find { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .find input { min-height: 46px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; font: inherit; background: var(--surface); color: inherit; min-width: 0; }
+    .rep-who .nm2 { font-size: 13px; color: var(--muted); }
+    .rep-who .at { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .dup .rep-row > div:first-child { grid-row: span 2; display: grid; gap: 4px; align-content: start; }
+    .rep-idx { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
+    .rep-row mark { background: #ffe58a; color: inherit; border-radius: 3px; }
+    #dMore { justify-self: center; }
+  </style>
+</head>
+<body>
+<div class="page admin dup">
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>중복 예약 상세</span>
+    </div>
+    <div class="who" id="who" hidden>
+      <span id="whoEmail"></span>
+      <b class="role-badge edit">편집</b>
+      <button type="button" class="small" id="logoutBtn">로그아웃</button>
+    </div>
+  </header>
+
+  <div class="notice" id="setupNotice" hidden></div>
+
+  <main id="loginView" hidden>
+    <form class="step login-box" id="loginForm" novalidate>
+      <h2>관리자 로그인</h2>
+      <p class="muted">편집 권한이 있는 관리자 계정만 볼 수 있어요.</p>
+      <label class="field">이메일<input id="lEmail" type="email" autocomplete="username" required></label>
+      <label class="field">비밀번호<input id="lPass" type="password" autocomplete="current-password" required></label>
+      <p class="form-error" id="loginError" role="alert"></p>
+      <button type="submit" class="primary" id="loginBtn">로그인</button>
+    </form>
+  </main>
+
+  <main id="mainView" hidden>
+    <section class="step">
+      <div class="stat-head">
+        <h2>한눈에 보기</h2>
+        <span class="muted" id="dAt"></span>
+      </div>
+      <div class="tiles">
+        <div class="tile"><span class="t-label">오픈 좌석</span><b id="tSeats">–</b><span class="t-sub">공개된 날짜 정원 합계</span></div>
+        <div class="tile"><span class="t-label">예약</span><b id="tBook">–</b><span class="t-sub" id="tBookSub"></span></div>
+        <div class="tile warn"><span class="t-label" id="tDupLabel">중복 추정 인원</span><b id="tDup">–</b><span class="t-sub" id="tDupSub"></span></div>
+        <div class="tile warn"><span class="t-label">중복이 차지한 자리</span><b id="tExtra">–</b><span class="t-sub" id="tExtraSub"></span></div>
+      </div>
+      <div class="dist" id="dist"></div>
+    </section>
+
+    <section class="step">
+      <div class="rep-ctrl">
+        <div class="seg" role="group" aria-label="기준">
+          <button type="button" class="on" data-by="phone" aria-pressed="true">사람(연락처)</button>
+          <button type="button" data-by="plate" aria-pressed="false">차량</button>
+        </div>
+        <select id="dMin" aria-label="최소 예약 횟수">
+          <option value="2">2회 이상</option><option value="3">3회 이상</option><option value="4">4회 이상</option>
+          <option value="5">5회 이상</option><option value="7">7회 이상</option><option value="10">10회 이상</option>
+        </select>
+        <button type="button" id="dCsv">CSV 저장</button>
+        <button type="button" id="dRefresh">새로고침</button>
+      </div>
+      <div class="find">
+        <input id="dFind" type="search" placeholder="이름 · 연락처 · 차량번호로 찾기" autocomplete="off">
+        <button type="button" id="dClear">지우기</button>
+      </div>
+      <p class="rep-sum" id="dSum"></p>
+      <div class="rep-list" id="dList"></div>
+      <button type="button" id="dMore" hidden>더 보기</button>
+      <p class="muted small" id="dNote"></p>
+    </section>
+  </main>
+</div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var pad = function (n) { return String(n).padStart(2, "0"); };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]; }); };
+  var ymd = function (d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+  var DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  var md = function (s) { var p = s.split("-").map(Number), d = new Date(p[0], p[1] - 1, p[2]); return (d.getMonth() + 1) + "/" + d.getDate() + "(" + DOW[d.getDay()] + ")"; };
+  var stamp = function (iso) { var d = new Date(iso); return (d.getMonth() + 1) + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+  var num = function (v) { return (v || 0).toLocaleString(); };
+  var SLOT_CLS = { "09:00": "s09", "12:00": "s12", "15:00": "s15" };
+
+  var cfg = window.APP_CONFIG || {};
+  var sb = cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+  if (!sb) { $("setupNotice").hidden = false; $("setupNotice").textContent = "DB가 연결되지 않았어요."; return; }
+
+  function showLogin(msg) { $("loginView").hidden = false; $("mainView").hidden = true; $("who").hidden = true; $("loginError").textContent = msg || ""; data = null; $("dList").innerHTML = ""; }
+  function isEditor() { return sb.rpc("is_editor").then(function (r) { if (r.error) throw r.error; return r.data === true; }); }
+  function enter(email) {
+    return isEditor().then(function (ok) {
+      if (!ok) { sb.auth.signOut({ scope: "local" }).catch(function () {}); showLogin("편집 권한이 있는 관리자 계정만 볼 수 있어요."); return; }
+      $("loginView").hidden = true; $("mainView").hidden = false; $("who").hidden = false; $("whoEmail").textContent = email;
+      load();
+    });
+  }
+  sb.auth.getSession().then(function (r) {
+    var s = r.data && r.data.session;
+    if (s) enter(s.user.email).catch(function () { showLogin("확인하지 못했어요. 다시 로그인해 주세요."); });
+    else showLogin();
+  });
+  $("loginForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var em = $("lEmail").value.trim(), pw = $("lPass").value;
+    if (!em || !pw) { $("loginError").textContent = "이메일과 비밀번호를 입력하세요."; return; }
+    $("loginBtn").disabled = true; $("loginError").textContent = "";
+    sb.auth.signInWithPassword({ email: em, password: pw }).then(function (r) {
+      if (r.error) { $("loginError").textContent = /invalid/i.test(r.error.message || "") ? "이메일 또는 비밀번호가 맞지 않아요." : "로그인하지 못했어요."; return; }
+      $("lPass").value = ""; return enter(r.data.user.email);
+    }).catch(function () { $("loginError").textContent = "로그인하지 못했어요."; })
+      .then(function () { $("loginBtn").disabled = false; });
+  });
+  $("logoutBtn").addEventListener("click", function () { sb.auth.signOut({ scope: "local" }).catch(function () {}).then(function () { showLogin("로그아웃했어요."); }); });
+  // 1분마다 권한 다시 확인 (전체 로그아웃·권한 변경 반영)
+  setInterval(function () {
+    if ($("mainView").hidden || document.hidden) return;
+    isEditor().then(function (ok) { if (!ok) { sb.auth.signOut({ scope: "local" }).catch(function () {}); showLogin("로그인이 해제됐어요. 다시 로그인해 주세요."); } }).catch(function () {});
+  }, 60000);
+
+  // ---------- 데이터 ----------
+  var by = "phone", data = null, shown = 100, filtered = [];
+  function load() {
+    $("dAt").textContent = "불러오는 중…";
+    sb.rpc("admin_dup_detail", { p_by: by, p_min: +$("dMin").value }).then(function (r) {
+      if (r.error) throw r.error;
+      data = r.data || {}; shown = 100; render();
+      $("dAt").textContent = stamp(new Date().toISOString()) + " 기준";
+    }).catch(function (e) {
+      console.error(e);
+      var m = (e && (e.message || "")) + " " + (e && e.code || "");
+      $("dAt").textContent = /PGRST202|42883|Could not find the function/i.test(m) ? "supabase-repeat.sql 을 실행하면 보여요" : /42501|권한/.test(m) ? "편집 권한이 없어요" : "불러오지 못했어요";
+    });
+  }
+  function tiles() {
+    var d = data, unit = by === "plate" ? "대" : "명";
+    $("tSeats").textContent = num(d.seats);
+    $("tBook").textContent = num(d.bookings);
+    $("tBookSub").textContent = d.seats ? "좌석의 " + Math.round(d.bookings / d.seats * 100) + "% 찼어요" : "";
+    $("tDupLabel").textContent = by === "plate" ? "중복 추정 차량" : "중복 추정 인원";
+    $("tDup").textContent = num(d.dup) + unit;
+    $("tDupSub").textContent = (by === "plate" ? "예약된 차량 " : "신청한 사람 ") + num(d.total) + unit + " 중 " + (d.total ? Math.round(d.dup / d.total * 100) : 0) + "%";
+    $("tExtra").textContent = num(d.extra) + "석";
+    $("tExtraSub").textContent = d.seats ? "오픈 좌석의 " + (d.extra / d.seats * 100).toFixed(1) + "%" : "";
+    var cnt = {}; (d.rows || []).forEach(function (x) { cnt[x.n] = (cnt[x.n] || 0) + 1; });
+    var ks = Object.keys(cnt).map(Number).sort(function (a, b) { return a - b; });
+    $("dist").innerHTML = ks.length ? ks.map(function (k) { return "<span>" + k + "회 <b>" + num(cnt[k]) + "</b>" + unit + "</span>"; }).join("") : "";
+  }
+  function hl(text, q) {                       // 검색어가 그대로 들어 있으면 표시
+    var t = String(text == null ? "" : text), k = q ? t.toLowerCase().indexOf(q) : -1;
+    return k < 0 ? esc(t) : esc(t.slice(0, k)) + "<mark>" + esc(t.slice(k, k + q.length)) + "</mark>" + esc(t.slice(k + q.length));
+  }
+  function matches(x, q) {
+    if (!q) return true;
+    var hay = [x.name, x.phone, (x.names || []).join(" "), (x.plates || []).join(" "), x.plate, (x.phone_list || []).join(" ")].join(" ").replace(/[\s-]/g, "").toLowerCase();
+    return hay.indexOf(q) >= 0;
+  }
+  function render() {
+    if (!data) return;
+    tiles();
+    var q = $("dFind").value.replace(/[\s-]/g, "").toLowerCase(), qRaw = $("dFind").value.trim().toLowerCase();
+    var rows = data.rows || [], min = +$("dMin").value, unit = by === "plate" ? "대" : "명", today = ymd(new Date());
+    filtered = rows.filter(function (x) { return matches(x, q); });
+    $("dSum").innerHTML = min + "회 이상 <b>" + num(data.count) + "</b>" + unit + (q ? " 중 검색 결과 <b>" + num(filtered.length) + "</b>" + unit : "");
+    if (!filtered.length) { $("dList").innerHTML = '<p class="muted">' + (q ? "찾는 결과가 없어요." : "해당하는 " + (by === "plate" ? "차량이" : "사람이") + " 없어요.") + "</p>"; $("dMore").hidden = true; return; }
+    $("dList").innerHTML = filtered.slice(0, shown).map(function (x, i) {
+      var who;
+      if (by === "plate") {
+        who = '<span class="pl">' + hl(x.plate, qRaw) + "</span>" +
+          '<span class="sub">연락처 ' + (x.phones || 0) + "개" + (x.phone_list && x.phone_list.length ? ": " + x.phone_list.map(function (p) { return hl(p, qRaw); }).join(", ") : " (직원이 넣은 예약)") + "</span>" +
+          (x.names && x.names.length ? '<span class="nm2">' + x.names.map(function (n) { return hl(n, qRaw); }).join(", ") + "</span>" : "");
+      } else {
+        var other = (x.names || []).filter(function (n) { return n !== x.name; });
+        who = "<b>" + hl(x.name, qRaw) + "</b>" + (other.length ? '<span class="nm2">(다른 이름: ' + other.map(function (n) { return hl(n, qRaw); }).join(", ") + ")</span>" : "") +
+          '<span class="ph">' + hl(x.phone, qRaw) + "</span>" +
+          '<span class="sub">' + (x.plates || []).map(function (p) { return hl(p, qRaw); }).join(", ") + ((x.plates || []).length > 1 ? " (차량 " + x.plates.length + "대)" : "") + "</span>" +
+          (x.first_at ? '<span class="at">신청 ' + stamp(x.first_at) + (x.last_at && x.last_at !== x.first_at ? " ~ " + stamp(x.last_at) : "") + "</span>" : "");
+      }
+      var days = (x.items || []).map(function (it) {
+        var dd = String(it.d).slice(0, 10);
+        return '<span class="' + (SLOT_CLS[it.t] || "") + (dd < today ? " past" : "") + '">' + md(dd) + " " + String(it.t).slice(0, 2) + "시" +
+          (by === "phone" && (x.plates || []).length > 1 ? ' <i class="pp">' + esc(it.p) + "</i>" : "") + "</span>";
+      }).join("");
+      return '<div class="rep-row"><div><div class="rep-n' + (x.n >= 5 ? " hi" : "") + '">' + x.n + "<small>회</small></div><div class=\"rep-idx\">" + (i + 1) + "</div></div>" +
+        '<div class="rep-who">' + who + '</div><div class="rep-days">' + days + "</div></div>";
+    }).join("");
+    $("dMore").hidden = filtered.length <= shown;
+    $("dMore").textContent = "더 보기 (" + num(filtered.length - shown) + unit + " 남음)";
+    $("dNote").textContent = (by === "phone"
+      ? "같은 연락처로 신청한 예약을 모두 셌어요(차량이 달라도 포함). 신청 페이지로 예약한 것만 해당돼요. 연락처를 바꿔 신청한 경우는 '차량' 기준에서 찾을 수 있어요."
+      : "같은 차량(지역명 무시)의 예약을 셌어요. 직원이 넣은 예약도 포함돼요. 차량은 하루 한 번만 예약되니 횟수 = 예약한 날 수예요.") +
+      " 오픈 좌석은 지금 공개된 날짜의 시간대별 정원 합계, 중복이 차지한 자리는 같은 사람(차량)의 두 번째 예약부터 센 수예요. 취소한 예약은 빠져요.";
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".seg button"), function (b) {
+    b.addEventListener("click", function () {
+      if (by === b.getAttribute("data-by")) return;
+      by = b.getAttribute("data-by");
+      Array.prototype.forEach.call(document.querySelectorAll(".seg button"), function (o) { o.classList.toggle("on", o === b); o.setAttribute("aria-pressed", String(o === b)); });
+      load();
+    });
+  });
+  $("dMin").addEventListener("change", load);
+  $("dRefresh").addEventListener("click", load);
+  var ft; $("dFind").addEventListener("input", function () { clearTimeout(ft); ft = setTimeout(function () { shown = 100; render(); }, 200); });
+  $("dClear").addEventListener("click", function () { $("dFind").value = ""; shown = 100; render(); });
+  $("dMore").addEventListener("click", function () { shown += 200; render(); });
+
+  // CSV 저장 (엑셀에서 바로 열리도록 UTF-8 BOM)
+  $("dCsv").addEventListener("click", function () {
+    if (!data) return;
+    var c = function (v) { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var sched = function (x) { return (x.items || []).map(function (it) { return String(it.d).slice(0, 10) + " " + it.t + (it.p && by === "phone" ? " " + it.p : ""); }).join(" / "); };
+    var lines = by === "plate"
+      ? [["횟수", "차량번호", "연락처 수", "연락처", "이름", "예약 일정"]].concat(filtered.map(function (x) { return [x.n, x.plate, x.phones, (x.phone_list || []).join(" "), (x.names || []).join(" "), sched(x)]; }))
+      : [["횟수", "이름", "다른 이름", "연락처", "차량", "첫 신청", "마지막 신청", "예약 일정"]].concat(filtered.map(function (x) {
+          return [x.n, x.name, (x.names || []).filter(function (n) { return n !== x.name; }).join(" "), x.phone, (x.plates || []).join(" "),
+                  x.first_at ? stamp(x.first_at) : "", x.last_at ? stamp(x.last_at) : "", sched(x)];
+        }));
+    var blob = new Blob(["﻿" + lines.map(function (r) { return r.map(c).join(","); }).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "dup_" + by + "_" + ymd(new Date()).replace(/-/g, "") + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+})();
+</script>
+</body>
+</html>

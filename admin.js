@@ -360,8 +360,12 @@
   function renderRepeat() {
     var d = repData || {}, rows = d.rows || [], min = +$("repMin").value, today = ymd(new Date());
     var unit = repBy === "plate" ? "대" : "명";
-    $("repSum").innerHTML = (repBy === "plate" ? "예약된 차량 " : "신청한 사람 ") + "<b>" + (d.total || 0).toLocaleString() + "</b>" + unit +
-      " 중 " + min + "회 이상 <b>" + (d.count || 0).toLocaleString() + "</b>" + unit + (d.count > rows.length ? " (많은 순 " + rows.length + unit + "까지 표시)" : "");
+    var N = function (v) { return "<b>" + (v || 0).toLocaleString() + "</b>"; };
+    $("repSum").innerHTML = "오픈 좌석 " + N(d.seats) + "석 · 예약 " + N(d.bookings) + "건 · " +
+      (repBy === "plate" ? "중복 추정 차량 " : "중복 추정 인원 ") + N(d.dup) + unit +
+      ' <span class="muted">(두 번째부터 차지한 자리 ' + (d.extra || 0).toLocaleString() + "석)</span>" +
+      (min > 2 ? " · " + min + "회 이상 " + N(d.count) + unit : "") +
+      (d.count > rows.length ? ' <span class="muted">(많은 순 ' + rows.length + unit + "까지 표시)</span>" : "");
     if (!rows.length) { $("repList").innerHTML = '<p class="muted">' + min + "회 이상 예약한 " + (repBy === "plate" ? "차량이" : "사람이") + " 없어요.</p>"; $("repMore").hidden = true; return; }
     $("repList").hidden = !repShow;
     $("repList").innerHTML = rows.slice(0, repShow).map(function (x) {

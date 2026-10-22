@@ -40,7 +40,7 @@
     $("whoEmail").textContent = email;
     canEdit = false; applyRole();
     checkEditor().then(function (ok) { canEdit = ok; applyRole(); });
-    loadMonth(); loadSummary(); loadStats();
+    loadMonth(); loadSummary(); loadStats(); loadRepeat();
   }
   function applyRole() {
     document.body.classList.toggle("viewonly", !canEdit);
@@ -340,6 +340,59 @@
     });
   }
   setInterval(loadStats, 60000);
+
+  // ---------- 여러 번 예약 (보기·편집 관리자 모두) ----------
+  var repBy = "phone", repData = null, repShow = 30;
+  var SLOT_CLS = { "09:00": "s09", "12:00": "s12", "15:00": "s15" };
+  function loadRepeat() {
+    if ($("adminView").hidden) return;
+    $("repAt").textContent = "불러오는 중…";
+    sb.rpc("admin_repeat_bookers", { p_by: repBy, p_min: +$("repMin").value }).then(function (r) {
+      if (r.error) throw r.error;
+      repData = r.data || {}; repShow = 30; renderRepeat();
+      $("repAt").textContent = stamp(new Date().toISOString()) + " 기준";
+    }).catch(function (e) {
+      console.error(e); repData = null;
+      $("repSum").textContent = ""; $("repList").innerHTML = ""; $("repMore").hidden = true;
+      $("repAt").textContent = missingSql(e) ? "supabase-repeat.sql 을 실행하면 보여요" : "불러오지 못했어요";
+    });
+  }
+  function renderRepeat() {
+    var d = repData || {}, rows = d.rows || [], min = +$("repMin").value, today = ymd(new Date());
+    var unit = repBy === "plate" ? "대" : "명";
+    $("repSum").innerHTML = (repBy === "plate" ? "예약된 차량 " : "신청한 사람 ") + "<b>" + (d.total || 0).toLocaleString() + "</b>" + unit +
+      " 중 " + min + "회 이상 <b>" + (d.count || 0).toLocaleString() + "</b>" + unit + (d.count > rows.length ? " (많은 순 " + rows.length + unit + "까지 표시)" : "");
+    if (!rows.length) { $("repList").innerHTML = '<p class="muted">' + min + "회 이상 예약한 " + (repBy === "plate" ? "차량이" : "사람이") + " 없어요.</p>"; $("repMore").hidden = true; return; }
+    $("repList").innerHTML = rows.slice(0, repShow).map(function (x) {
+      var who = repBy === "plate"
+        ? '<span class="pl">' + esc(x.plate) + "</span>" + (x.phones > 1 ? '<span class="sub">연락처 ' + x.phones + "개로 예약</span>" : "")
+        : "<b>" + esc(x.name || "") + '</b><span class="ph">' + esc(x.phone || "") + "</span>" +
+          '<span class="sub">' + (x.plates || []).map(esc).join(", ") + ((x.plates || []).length > 1 ? " (차량 " + x.plates.length + "대)" : "") + "</span>";
+      var days = (x.items || []).map(function (it) {
+        var dd = String(it.d).slice(0, 10);
+        return '<span class="' + (SLOT_CLS[it.t] || "") + (dd < today ? " past" : "") + '">' + md(dd) + " " + String(it.t).slice(0, 2) + "시" +
+          (repBy === "phone" && (x.plates || []).length > 1 ? ' <i class="pp">' + esc(it.p) + "</i>" : "") + "</span>";
+      }).join("");
+      return '<div class="rep-row"><div class="rep-n' + (x.n >= 5 ? " hi" : "") + '">' + x.n + "<small>회</small></div>" +
+        '<div class="rep-who">' + who + '</div><div class="rep-days">' + days + "</div></div>";
+    }).join("");
+    $("repMore").hidden = rows.length <= repShow;
+    $("repNote").textContent = "예약 기간 전체(취소한 예약 제외) 기준이에요." +
+      (repBy === "phone" ? " 같은 연락처로 신청한 예약을 모두 세요(차량이 달라도 포함). 신청 페이지로 예약한 것만 세고, 직원이 넣은 예약은 '차량' 기준에서 보여요."
+                         : " 같은 차량은 하루 한 번만 예약되니 횟수 = 예약한 날 수예요. 지역명이 달라도 같은 차로 보고, 직원이 넣은 예약도 포함해요.") +
+      (repBy === "phone" && !d.full ? " 보기 권한에서는 이름·연락처 일부를 가려서 보여 줘요." : "");
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".rep-ctrl .seg button"), function (b) {
+    b.addEventListener("click", function () {
+      if (repBy === b.getAttribute("data-by")) return;
+      repBy = b.getAttribute("data-by");
+      Array.prototype.forEach.call(document.querySelectorAll(".rep-ctrl .seg button"), function (o) { o.classList.toggle("on", o === b); o.setAttribute("aria-pressed", String(o === b)); });
+      loadRepeat();
+    });
+  });
+  $("repMin").addEventListener("change", loadRepeat);
+  $("repRefresh").addEventListener("click", loadRepeat);
+  $("repMore").addEventListener("click", function () { repShow += 50; renderRepeat(); });
 
   // 1분마다 아직 관리자로 인정되는지 확인 (전체 로그아웃·권한 변경 시 로그인 화면으로)
   setInterval(function () {

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=8">
-  <link rel="stylesheet" href="admin.css?v=15">
+  <link rel="stylesheet" href="admin.css?v=16">
 </head>
 <body>
 <div class="page admin">
@@ -140,11 +140,32 @@
       <div class="days" id="sDays"></div>
       <p class="muted small">안내·예약 신청·예약확인증 페이지를 연 횟수예요. 이름·연락처·IP는 저장하지 않고, 기록은 90일 뒤 지워져요.</p>
     </section>
+
+    <section class="step" aria-labelledby="repTitle">
+      <div class="stat-head">
+        <h2 id="repTitle">여러 번 예약</h2>
+        <span class="muted" id="repAt"></span>
+      </div>
+      <div class="rep-ctrl">
+        <div class="seg" role="group" aria-label="기준">
+          <button type="button" class="on" data-by="phone" aria-pressed="true">사람(연락처)</button>
+          <button type="button" data-by="plate" aria-pressed="false">차량</button>
+        </div>
+        <select id="repMin" aria-label="최소 예약 횟수">
+          <option value="2">2회 이상</option><option value="3">3회 이상</option><option value="4">4회 이상</option><option value="5">5회 이상</option>
+        </select>
+        <button type="button" id="repRefresh">새로고침</button>
+      </div>
+      <p class="rep-sum" id="repSum"></p>
+      <div class="rep-list" id="repList"></div>
+      <button type="button" id="repMore" hidden>더 보기</button>
+      <p class="muted small" id="repNote"></p>
+    </section>
   </main>
 </div>
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=13"></script>
+<script src="admin.js?v=14"></script>
 </body>
 </html>

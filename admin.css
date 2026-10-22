@@ -117,3 +117,10 @@ button.cap-save { width: 100%; }
 .dayrow .dnum { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
 .dayrow.today { font-weight: 700; }
 @media (max-width: 480px) { .tile b { font-size: 24px; } .hours .hb span { font-size: 10px; } .hours .hb span.l3 { display: none; } .hours .hb em { display: none; } .tile { padding: 10px; } }
+
+/* 권한 표시 · 보기 전용 */
+.role-badge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
+.role-badge.edit { color: var(--ok); background: var(--ok-soft); }
+.role-badge.view { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
+body.viewonly .actions, body.viewonly .quick { display: none; }
+body.viewonly .day { cursor: default; }

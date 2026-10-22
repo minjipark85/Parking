@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=4">
-  <link rel="stylesheet" href="admin.css?v=13">
+  <link rel="stylesheet" href="admin.css?v=14">
 </head>
 <body>
 <div class="page admin">
@@ -20,6 +20,7 @@
     </div>
     <div class="who" id="who" hidden>
       <span id="whoEmail"></span>
+      <b class="role-badge view" id="roleBadge">보기 전용</b>
       <a class="back" href="check-7k2q.html">확인 앱</a>
       <button type="button" class="small" id="logoutBtn">로그아웃</button>
     </div>
@@ -59,6 +60,8 @@
         <button type="button" class="small" id="pickClear">선택 해제</button>
       </div>
     </section>
+
+    <p class="notice" id="viewOnlyNote" hidden>보기 전용 계정이에요. 날짜 열기·닫기, 공개 예약, 정원 변경은 <b>편집 권한</b>이 있는 관리자만 할 수 있어요.</p>
 
     <section class="step actions" aria-labelledby="actTitle">
       <h2 id="actTitle"><span id="selCount">0</span>일 선택됨</h2>
@@ -121,6 +124,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=11"></script>
+<script src="admin.js?v=12"></script>
 </body>
 </html>

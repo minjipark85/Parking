@@ -25,10 +25,28 @@
     $("loginView").hidden = false; $("adminView").hidden = true; $("who").hidden = true;
     $("loginError").textContent = msg || "";
   }
+  // 편집 권한(날짜 열기·닫기·정원 변경) — 없으면 보기 전용 화면
+  //  (supabase-roles.sql 을 아직 실행하지 않은 DB는 예전처럼 관리자 = 편집)
+  var canEdit = false;
+  function checkEditor() {
+    return sb.rpc("is_editor").then(function (r) {
+      if (r.error) { if (missingSql(r.error)) return true; throw r.error; }
+      return r.data === true;
+    }, function () { return false; });
+  }
   function showAdmin(email) {
     $("loginView").hidden = true; $("adminView").hidden = false; $("who").hidden = false;
     $("whoEmail").textContent = email;
+    canEdit = false; applyRole();
+    checkEditor().then(function (ok) { canEdit = ok; applyRole(); });
     loadMonth(); loadSummary(); loadStats();
+  }
+  function applyRole() {
+    document.body.classList.toggle("viewonly", !canEdit);
+    $("roleBadge").textContent = canEdit ? "편집" : "보기 전용";
+    $("roleBadge").className = "role-badge " + (canEdit ? "edit" : "view");
+    $("viewOnlyNote").hidden = canEdit;
+    if (!canEdit && Object.keys(selected).length) { selected = {}; renderMonth(); }
   }
   // DB 설정(supabase-opendates.sql)을 아직 안 했으면 함수가 없다는 오류가 옴
   function missingSql(e) {
@@ -110,6 +128,7 @@
     renderSelection();
   }
   $("calGrid").addEventListener("click", function (e) {
+    if (!canEdit) return;                                   // 보기 전용: 날짜 선택 안 됨
     var b = e.target.closest(".day"); if (!b || !b.dataset.date || b.classList.contains("past")) return;
     var v = b.dataset.date;
     if (selected[v]) delete selected[v]; else selected[v] = true;

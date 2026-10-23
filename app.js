@@ -594,18 +594,30 @@
     // 흰 바탕 찾기와 글자 줄 찾기가 같은 곳을 가리키면 번호판일 가능성이 높음 → 가산점
     cands.forEach((a) => {
       if (cands.some((b) => b !== a && !!b.text !== !!a.text && boxIoU(a.box, b.box) > 0.25)) a.score += 1.5;
-      // 직원은 번호판을 화면 가운데 쪽으로 비추므로, 가장자리 후보는 조금 낮춤
-      const cx = (a.box[0] + a.box[2]) / 2 / W - 0.5, cy = (a.box[1] + a.box[3]) / 2 / H - 0.55;
-      a.score -= Math.min(1.2, Math.hypot(cx, cy) * 1.6);
+      if (a.text) a.score -= 2;                            // 글자 줄 후보 점수를 흰 바탕 후보와 같은 눈금으로
+      // 직원은 번호판을 화면 가운데에 맞춰 비추므로 가운데에서 멀수록 크게 낮춤
+      //  (가운데 ±6%는 그대로, 그 밖은 거리에 비례 · 옆 차 번호판·간판·벽 글씨가 가운데 번호판을 이기지 못하게)
+      const cx = (a.box[0] + a.box[2]) / 2 / W - 0.5, cy = ((a.box[1] + a.box[3]) / 2 / H - 0.52) * 0.8;
+      const d = Math.hypot(cx, cy), wf = (a.box[2] - a.box[0]) / W;
+      a.cw = Math.max(0.1, 1 - Math.max(0, d - 0.06) * 2.4);   // 가운데 정도 1(가운데) ~ 0.1(가장자리)
+      a.de = d / Math.max(0.1, wf * 2);                       // 번호판 크기에 견준 가운데와의 거리 (멀리 찍으면 번호판이 작아 더 엄격)
+      a.wf = wf;
+      a.score -= Math.max(0, d - 0.06) * 12;
     });
     cands.sort((a, b) => b.score - a.score);
-    const out = [];
+    const uniq = [];
     for (const cd of cands) {
-      if (out.some((x) => boxIoU(x.box, cd.box) > 0.3)) continue;
-      out.push(cd);
-      if (out.length >= (maxN || 3)) break;
+      if (uniq.some((x) => boxIoU(x.box, cd.box) > 0.3)) continue;
+      uniq.push(cd);
+      if (uniq.length >= 8) break;
     }
-    return out.map((cd) => ({ text: !!cd.text, score: cd.score, quad: cd.quad.map(([x, y]) => [c0.x + (x + 0.5) / k, c0.y + (y + 0.5) / k]) }));
+    // 번호판다운 후보(1등과 점수 차 4 이내, 화면 폭 65% 이하) 중에서는 가운데에 가까운 것부터 읽음
+    //  → 멀리서 찍어 옆 차 번호판이 가까이 붙어 보여도 가운데 번호판을 먼저 읽음
+    const top = uniq.length ? uniq[0].score : 0;
+    const plaus = uniq.filter((c) => c.score >= top - 4 && c.wf <= 0.65).sort((a, b) => a.de - b.de);
+    const out = plaus.concat(uniq.filter((c) => plaus.indexOf(c) < 0)).slice(0, maxN || 3);
+    // central: 가운데에서 번호판 폭 정도 이내(번호판 크기 기준) — 실시간 확정에 씀
+    return out.map((cd) => ({ text: !!cd.text, score: cd.score, cw: cd.cw, central: cd.de <= 0.55, quad: cd.quad.map(([x, y]) => [c0.x + (x + 0.5) / k, c0.y + (y + 0.5) / k]) }));
   }
   // =========================================================
   //  글자 줄로 번호판 찾기
@@ -812,6 +824,39 @@
     rx.drawImage(src, x0, y0, x1 - x0, y1 - y0, 0, 0, rw, rh);
     return rectifyPlate(r, rw, rh, quad.map(([x, y]) => [(x - x0) * s, (y - y0) * s]));
   }
+  // 편 번호판 가장자리의 테두리선·바깥 어두운 부분을 바탕색으로 지움
+  //  · 흐리게 찍히면 글자가 테두리와 붙어 한 덩어리가 되거나, 왼쪽 테두리가 "1"로 읽혀 "38나"가 "138나"가 됨
+  //  · 바깥쪽부터 안으로: 거의 다(85%) 어두운 세로줄(양 끝 4% 안), 60% 넘게 어두운 가로줄(위아래 16% 안)만 — 글자 "1"은 높이의 70% 정도라 남음
+  function stripFrame(flat) {
+    const W = flat.width, H = flat.height;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(flat, 0, 0);
+    const d = x.getImageData(0, 0, W, H), p = d.data, n = W * H, g = grayOf(p, n), thr = otsu(g);
+    // 흰 글자 번호판(예전 녹색)은 뒤집어서 판단
+    let midDark = 0, midN = 0;
+    for (let y = Math.round(H * 0.25); y < H * 0.75; y++) for (let xx = Math.round(W * 0.1); xx < W * 0.9; xx++) { midDark += g[y * W + xx] <= thr ? 1 : 0; midN++; }
+    const inv = midN && midDark / midN > 0.5;
+    const isDark = (i) => (g[i] <= thr) !== inv;
+    // 칠할 색: 가운데 부분에서 밝은 쪽 85% 지점(번호판 바탕색). 흰 글자 번호판이면 어두운 쪽
+    const mid = [];
+    for (let y = Math.round(H * 0.2); y < H * 0.8; y += 2) for (let xx = Math.round(W * 0.1); xx < W * 0.9; xx += 2) mid.push(g[y * W + xx]);
+    mid.sort((a2, b2) => a2 - b2);
+    const bg = mid.length ? mid[Math.floor(mid.length * (inv ? 0.15 : 0.85))] : 255;
+    const rowDark = (y) => { let k = 0; for (let xx = 0; xx < W; xx++) k += isDark(y * W + xx) ? 1 : 0; return k / W; };
+    const paintCol = (xx) => { for (let y = 0; y < H; y++) { const j = (y * W + xx) * 4; p[j] = p[j + 1] = p[j + 2] = bg; } };
+    const paintRow = (y) => { for (let xx = 0; xx < W; xx++) { const j = (y * W + xx) * 4; p[j] = p[j + 1] = p[j + 2] = bg; } };
+    let changed = false;
+    const cw = Math.max(2, Math.round(W * 0.04)), rh = Math.max(2, Math.round(H * 0.16));
+    for (let y = 0; y < rh && rowDark(y) > 0.6; y++) { paintRow(y); changed = true; }
+    for (let y = H - 1; y >= H - rh && rowDark(y) > 0.6; y--) { paintRow(y); changed = true; }
+    // 세로줄은 위아래를 지운 뒤 가운데 부분 기준으로 판단
+    const colDarkMid = (xx) => { let k = 0, t = 0; for (let y = Math.round(H * 0.12); y < H * 0.88; y++) { k += isDark(y * W + xx) ? 1 : 0; t++; } return k / Math.max(1, t); };
+    for (let xx = 0; xx < cw && colDarkMid(xx) > 0.85; xx++) { paintCol(xx); changed = true; }
+    for (let xx = W - 1; xx >= W - cw && colDarkMid(xx) > 0.85; xx--) { paintCol(xx); changed = true; }
+    if (!changed) return flat;
+    x.putImageData(d, 0, 0);
+    return c;
+  }
   // 편 번호판을 흑백 두 색으로 또렷하게 (로↔모 같은 한글 혼동이 줄어듦)
   function binarized(flat) {
     const c = document.createElement("canvas"); c.width = flat.width; c.height = flat.height;
@@ -825,6 +870,12 @@
     let midDark = 0, midN = 0;
     for (let y = Math.round(H * 0.2); y < H * 0.8; y++) for (let x = Math.round(W * 0.1); x < W * 0.9; x++) { midDark += dark[y * W + x]; midN++; }
     if (midN && midDark / midN > 0.5) for (let i = 0; i < n; i++) dark[i] = dark[i] ? 0 : 1;
+    // 맨 가장자리(좌우 3%, 위아래 8%)는 비움 — 흐린 화면에서 테두리선과 글자가 붙어 글자째 지워지는 것 방지
+    //  (번호판을 펼 때 여백을 두므로 글자는 이 안쪽에 있음)
+    {
+      const ex = Math.max(1, Math.round(W * 0.03)), ey = Math.max(1, Math.round(H * 0.08));
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x < ex || x >= W - ex || y < ey || y >= H - ey) dark[y * W + x] = 0;
+    }
     // 가장자리에 닿은 검은 덩어리 중 글자처럼 생기지 않은 것(테두리선·나사·배경)은 지움
     const seen = new Uint8Array(n), st = [];
     for (let i = 0; i < n; i++) {
@@ -869,11 +920,12 @@
     x.putImageData(d, 0, 0);
     return cleanLines(c);
   }
-  function halfSize(flat) {
-    const c = document.createElement("canvas"); c.width = Math.round(flat.width / 2); c.height = Math.round(flat.height / 2);
-    const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(flat, 0, 0, c.width, c.height);
+  function scaled(src, k) {
+    const c = document.createElement("canvas"); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+    const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(src, 0, 0, c.width, c.height);
     return c;
   }
+  const halfSize = (flat) => scaled(flat, 0.5);
   // 편 번호판 읽기
   //  · 실시간(빠르게): 흑백 → 안 되면 원본
   //  · 사진(꼼꼼히): 흑백·원본·절반 크기 세 번 읽어 다수결, 모두 실패하면 덩어리 읽기(예전 2단 번호판 대비)
@@ -925,31 +977,57 @@
     };
     return [cleanLines(cut(0, best)), cleanLines(cut(best, H))];
   }
+  // 펴 놓은 번호판 조각에서 번호 고르기 — 번호 말고 다른 글자가 4개 넘게 같이 읽히면
+  // 번호판이 아니라 간판·안내문 속 번호("…입차 12가3456")로 보고 버림
+  function extractFlat(text) {
+    const p = extractPlate(text);
+    if (!p) return null;
+    const all = String(text).replace(/[^가-힣0-9]/g, "");
+    return all.length - p.length > 4 ? null : p;
+  }
   // 짧은·두 줄 번호판 읽기: 두 줄이면 줄마다 읽어 이어 붙이고, 아니면 한 줄·덩어리로
   async function readTall(w, bin, flat) {
     // 짧은 흰 번호판(한 줄)은 통째로 읽으면 되고, 두 줄 번호판은 통째로는 안 읽히므로 줄을 나눠서
-    const one = extractPlate(await recognizeAs(w, bin, "7"));
+    const one = extractFlat(await recognizeAs(w, bin, "7"));
     if (one) return one;
     const parts = splitLines(bin);
     if (parts) {
       const t = (await recognizeAs(w, parts[0], "7")) + (await recognizeAs(w, parts[1], "7"));
-      const p = extractPlate(t.replace(/\s+/g, ""));
+      const p = extractFlat(t.replace(/\s+/g, ""));
       if (p) return p;
     }
-    return extractPlate(await recognizeAs(w, bin, "6")) || extractPlate(await recognizeAs(w, flat, "6"));
+    return extractFlat(await recognizeAs(w, bin, "6")) || extractFlat(await recognizeAs(w, flat, "6"));
   }
-  async function readFlat(w, flat, thorough) {
-    const bin = binarized(flat);
-    if (flat.width / flat.height < 3.6) {                    // 짧은 흰 번호판·예전 두 줄 번호판
-      const p = await readTall(w, bin, flat);
+  // 흑백 그림에 남은 글자 범위(좌우) 바깥의 양 끝을 원본에서 잘라냄 — 흐린 테두리선이 "1"로 읽히는 것 방지
+  function cropToText(flat, bin) {
+    const W = bin.width, H = bin.height, d = bin.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    let x0 = W, x1 = -1, nd = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4] < 128) { nd++; if (x < x0) x0 = x; if (x > x1) x1 = x; }
+    if (nd < W * H * 0.03 || x1 - x0 < W * 0.5) return flat;          // 흑백이 거의 비었거나 글자가 좁게만 남았으면 그대로
+    // 많이 자르지 않음: 양 끝 6%까지만 (흑백에서 글자가 사라졌어도 원본 글자를 자르지 않게)
+    const pad = Math.round(W * 0.05), a = Math.min(Math.round(W * 0.06), Math.max(0, x0 - pad)), b = Math.max(W - Math.round(W * 0.06), Math.min(W, x1 + 1 + pad));
+    if (a === 0 && b === W) return flat;
+    const c = document.createElement("canvas"); c.width = b - a; c.height = flat.height;
+    c.getContext("2d").drawImage(flat, a, 0, b - a, flat.height, 0, 0, b - a, flat.height);
+    return c;
+  }
+  async function readFlat(w, flat0, thorough, binK) {
+    const flat1 = stripFrame(flat0);
+    const bin = binarized(flat1);
+    if (flat1.width / flat1.height < 3.6) {                  // 짧은 흰 번호판·예전 두 줄 번호판
+      const p = await readTall(w, bin, flat1);
       return thorough ? (p ? { plate: p, weak: false, agree: 2 } : null) : p;
     }
+    const flat = cropToText(flat1, bin);
+    // 흑백 그림은 60% 크기로 줄여 읽는 편이 정확함(글자가 너무 크면 "84"를 "884"로 겹쳐 읽는 일이 생김)
+    //  흔들리거나 흐린 화면은 절반 크기로 줄이면 잡음이 줄어 읽히는 경우가 많음
+    const bin6 = scaled(bin, binK || 0.6);
     if (!thorough) {
-      return extractPlate(await recognizeAs(w, bin, "7")) || extractPlate(await recognizeAs(w, flat, "7"));
+      return extractFlat(await recognizeAs(w, bin6, "7")) || extractFlat(await recognizeAs(w, flat, "7")) || extractFlat(await recognizeAs(w, halfSize(flat), "7"));
     }
     const reads = [];
-    for (const c of [bin, flat, halfSize(flat)]) { const p = extractPlate(await recognizeAs(w, c, "7")); if (p) reads.push(p); }
-    if (!reads.length) { const p = extractPlate(await recognizeAs(w, flat, "6")); return p ? { plate: p, weak: true } : null; }
+    for (const c of [bin6, flat, halfSize(flat)]) { const p = extractFlat(await recognizeAs(w, c, "7")); if (p) reads.push(p); }
+    if (!reads.length) { const p = extractFlat(await recognizeAs(w, flat, "6")); return p ? { plate: p, weak: true } : null; }
     const cnt = {}; reads.forEach((p) => { cnt[p] = (cnt[p] || 0) + 1; });
     const best = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || reads.indexOf(a) - reads.indexOf(b))[0];
     return { plate: best, weak: false, agree: cnt[best] };
@@ -1016,11 +1094,14 @@
   // --- 실시간 카메라 인식 ---
   const video = $("video");
   let stream = null, timer = null, busy = false;
-  let recent = [];              // 최근 인식 결과 (흔들림 방지용)
   let lastShown = "", lastShownAt = 0;
   let avgMs = 0;                // 한 번 읽는 데 걸리는 평균 시간
-  let textHit = false;          // 최근 프레임이 글자 줄 찾기로 읽혔는지
-  let frameNo = 0, tryIdx = 0, bestVariant = 0, missStreak = 0, usedFlat = false;   // 사선 보정 순서
+  // 실시간 인식 상태
+  //  recent: 최근 5프레임 인식 결과 {p: 번호, cw: 화면 가운데 정도} (흔들림 방지·확정용)
+  //  missed: 최근에 못 읽은 후보 자리 → 다음 프레임에 다른 후보부터 · textHit: 최근에 글자 줄 찾기로 읽혔는지
+  //  frameNo·tryIdx·bestVariant·missStreak: 가운데 띠 보정 방법 돌리기 · usedFlat: 번호판을 펴서 읽었는지
+  const newLive = () => ({ recent: [], missed: [], lastConf: null, textHit: false, frameNo: 0, tryIdx: 0, bestVariant: 0, missStreak: 0, usedFlat: false });
+  let live = newLive();
 
   function setStatus(t) { $("camStatus").hidden = false; $("camStatus").textContent = t; }
   const speedText = () => (avgMs ? ` · ${(avgMs / 1000).toFixed(1)}초/회` : "");
@@ -1121,7 +1202,7 @@
     } else {
       video.style.transform = zoom > 1.001 ? "scale(" + zoom.toFixed(3) + ")" : "";
     }
-    recent = [];                                                 // 확대 비율이 바뀌면 이전 인식 결과는 버림
+    live.recent = [];                                            // 확대 비율이 바뀌면 이전 인식 결과는 버림
     try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (e) {}
   }
   const camEl = $("camBox");
@@ -1176,6 +1257,67 @@
     }
   }
 
+  // 실시간 한 프레임 처리 — 후보 찾기 → 가운데 후보부터 읽기 → 최근 결과로 확정 여부 판단
+  //  (화면 표시와 분리해 두어 시험 영상으로 프레임 단위 점검도 할 수 있음)
+  async function liveStep(L, w, src, vw, vh, fullCrop, crop) {
+    // 보정 방법 고르기: 네 번째마다 최근에 성공한 방법, 나머지는 다른 방법을 차례로
+    L.frameNo++;
+    let vi;
+    if (L.frameNo % 4 === 0) vi = L.bestVariant;
+    else { L.tryIdx = (L.tryIdx + 1) % VARIANTS.length; if (L.tryIdx === L.bestVariant) L.tryIdx = (L.tryIdx + 1) % VARIANTS.length; vi = L.tryIdx; }
+    let plate = null, plateCw = 1, cd = null, ci = 0, flat = null;
+    // 1순위: 화면 전체에서 번호판을 찾아 확대·정면 보정해 읽기
+    // 글자 줄 찾기는 조금 무거워서 두 프레임에 한 번 (최근에 그 방법으로 읽혔으면 매번)
+    const useText = L.frameNo % 2 === 0 || L.textHit;
+    let cands = fullCrop.w > 8 && fullCrop.h > 8 ? findPlateCands(src, vw, vh, fullCrop, 3, !useText) : [];
+    if (!cands.length && !useText && fullCrop.w > 8) cands = findPlateCands(src, vw, vh, fullCrop, 3, false);   // 흰 바탕 후보가 없으면 글자 줄로
+    if (cands.length) {
+      // 가운데 후보부터 읽되, 바로 전 두 프레임에서 못 읽은 자리는 건너뜀 (모두 못 읽었으면 다시 1순위부터)
+      //  · 바닥 선처럼 가운데에 있지만 번호판이 아닌 것에 매달리지 않고, 다음 프레임에 다른 후보를 읽음
+      const bbox = (q) => [Math.min(q[0][0], q[3][0]), Math.min(q[0][1], q[1][1]), Math.max(q[1][0], q[2][0]), Math.max(q[2][1], q[3][1])];
+      L.missed = L.missed.filter((m) => L.frameNo - m.f <= 2);
+      ci = cands.findIndex((c) => !L.missed.some((m) => boxIoU(m.b, bbox(c.quad)) > 0.5));
+      if (ci < 0) { ci = 0; L.missed = []; }
+      cd = cands[ci];
+      flat = rectifyFrom(src, vw, vh, cd.quad);
+      if (flat) {
+        // 흑백 그림을 읽는 크기를 프레임마다 바꿔 가며(60%·75%·50%) — 한 크기에서 헷갈리는 글자도 다른 크기에서 읽힘
+        plate = await readFlat(w, flat, false, [0.6, 0.75, 0.5][L.frameNo % 3]);
+        if (plate) L.missed = []; else L.missed.push({ b: bbox(cd.quad), f: L.frameNo });
+        L.usedFlat = !!plate;
+        // 가운데(번호판 크기 기준) 후보에서 읽힌 번호만 "가운데"로, 나머지는 가장자리처럼 취급(확정에 4번 필요)
+        //  · 가운데에 다른 후보가 있는데 가장자리 후보에서 읽힌 번호(옆 차 번호판)는 아예 세지 않음
+        plateCw = cd.central !== false ? 1 : cands.some((c) => c !== cd && c.central) ? 0 : 0.45;   // 0.45 = 가장자리
+        L.textHit = !!plate && !!cd.text;
+      }
+    }
+    // 2순위: 번호판 후보가 없으면 매번, 후보는 있는데 못 읽었으면 네 프레임에 한 번 — 가운데 띠를 보정 방법을 돌려가며 (무거워서 아껴 씀)
+    if (!plate && (!cands.length || L.frameNo % 4 === 3)) {
+      plate = extractPlate(await recognizeAs(w, toOcrCanvas(src, vw, vh, crop, VARIANTS[vi]), "6"));
+      if (plate) { L.bestVariant = vi; L.missStreak = 0; L.usedFlat = false; plateCw = 0.45; }   // 띠 안 어디서 읽혔는지 몰라 가장자리처럼(4번)
+      else if (++L.missStreak > 2 * VARIANTS.length) { L.bestVariant = 0; L.missStreak = 0; }
+    }
+    L.recent.push(plate ? { p: plate, cw: plateCw } : null);
+    if (L.recent.length > 5) L.recent.shift();
+    let confirmed = null;
+    if (plate && plateCw > 0) {
+      const same = L.recent.filter((x) => x && x.cw > 0 && x.p === plate);
+      // 최근에 다른 번호(옆 차 번호판, "72구3031"처럼 잘못 읽힌 번호)도 읽히고 있으면 가장 많이 읽힌 번호만 인정
+      const cnt = {}; L.recent.forEach((x) => { if (x && x.cw > 0 && x.p !== plate) cnt[x.p] = (cnt[x.p] || 0) + 1; });
+      const rival = Math.max.apply(null, [0].concat(Object.keys(cnt).map((k) => cnt[k])));
+      // 최근 5번 중 2번 이상 같은 번호로 읽혀야 확정
+      //  · 가장자리(옆 차·간판)나 가운데 띠 통째 읽기로만 읽힌 번호는 4번 (직원은 번호판을 가운데에 맞추므로)
+      const central = same.some((x) => x.cw >= 0.5), need = central ? 2 : 4;
+      // 가운데에서 확정된 차가 있으면 10초 동안은 가장자리에서만 읽힌 다른 번호(옆 차)로 바꾸지 않음
+      const hold = L.lastConf && L.lastConf.central && L.lastConf.p !== plate && Date.now() - L.lastConf.at < 10000;
+      if (same.length >= need && same.length > rival && (central || !hold)) {
+        confirmed = plate;
+        L.lastConf = { p: plate, central, at: Date.now() };
+      }
+    }
+    return { read: plateCw > 0 ? plate : null, confirmed, cd, ci, flat, cands: cands.length };
+  }
+
   async function scanFrame() {
     if (busy || !stream || video.readyState < 2 || document.hidden) return;
     busy = true;
@@ -1197,44 +1339,17 @@
       const fx0 = Math.max(0, f0[0]), fy0 = Math.max(0, f0[1]), fx1 = Math.min(vw, f1[0]), fy1 = Math.min(vh, f1[1]);
       const fullCrop = { x: fx0, y: fy0, w: fx1 - fx0, h: fy1 - fy0 };
       const toBox = (x, y) => [((x * scale - ox) - bw / 2) * dz + bw / 2, ((y * scale - oy) - bh / 2) * dz + bh / 2];
-      // 보정 방법 고르기: 짝수 번째는 최근에 성공한 방법, 홀수 번째는 다른 방법을 차례로
-      frameNo++;
-      let vi;
-      if (frameNo % 4 === 0) vi = bestVariant;
-      else { tryIdx = (tryIdx + 1) % VARIANTS.length; if (tryIdx === bestVariant) tryIdx = (tryIdx + 1) % VARIANTS.length; vi = tryIdx; }
       const w = await getWorker();
-      let plate = null;
-      // 1순위: 화면 전체에서 번호판을 찾아 확대·정면 보정해 읽기 (후보가 둘이면 번갈아)
-      // 글자 줄 찾기는 조금 무거워서 실시간에서는 두 프레임에 한 번 (최근에 그 방법으로 읽혔으면 매번)
-      const useText = frameNo % 2 === 0 || textHit;
-      let cands = fullCrop.w > 8 && fullCrop.h > 8 ? findPlateCands(video, vw, vh, fullCrop, 2, !useText) : [];
-      if (!cands.length && !useText && fullCrop.w > 8) cands = findPlateCands(video, vw, vh, fullCrop, 2, false);   // 흰 바탕 후보가 없으면 글자 줄로
-      if (cands.length) {
-        const second = frameNo % 2 === 1 && cands.length > 1;
-        const cd = cands[second ? 1 : 0];
-        const flat = rectifyFrom(video, vw, vh, cd.quad);
-        if (flat) {
-          plate = await readFlat(w, flat);
-          usedFlat = !!plate;
-          textHit = !!plate && !!cd.text;
-          // 화면 표시는 1순위 후보이거나 실제로 읽힌 경우만 (바닥 선 같은 보조 후보로 깜빡이지 않게)
-          if (!second || plate) showFound(cd.quad.map((p) => toBox(p[0], p[1])), flat, !!plate);
-        }
-      } else showFound(null);
-      // 2순위: 번호판 후보가 없으면 매번, 후보는 있는데 못 읽었으면 네 프레임에 한 번 — 가운데 띠를 보정 방법을 돌려가며 (무거워서 아껴 씀)
-      if (!plate && (!cands.length || frameNo % 4 === 3)) {
-        plate = extractPlate(await recognizeAs(w, toOcrCanvas(video, vw, vh, crop, VARIANTS[vi]), "6"));
-        if (plate) { bestVariant = vi; missStreak = 0; usedFlat = false; } else if (++missStreak > 2 * VARIANTS.length) { bestVariant = 0; missStreak = 0; }
-      }
+      const st = await liveStep(live, w, video, vw, vh, fullCrop, crop);
+      if (location.hash === "#debug") (window.__frames = window.__frames || []).push({ vw, vh, fullCrop, ci: st.ci, read: st.read, conf: st.confirmed, n: st.cands, q: st.cd && st.cd.quad.map((p) => p.map(Math.round)), text: st.cd && st.cd.text });
+      if (st.cd) { if (st.ci === 0 || st.read) showFound(st.cd.quad.map((p) => toBox(p[0], p[1])), st.flat, !!st.read); }
+      else if (!st.cands) showFound(null);
       const ms = performance.now() - t0;
       avgMs = avgMs ? avgMs * 0.7 + ms * 0.3 : ms;
-      recent.push(plate);
-      if (recent.length > 5) recent.shift();
-      // 최근 5번 중 2번 이상 같은 번호로 읽혀야 확정
-      const hits = plate ? recent.filter((x) => x === plate).length : 0;
-      if (plate && hits >= 2) {
+      const plate = st.confirmed || st.read;
+      if (st.confirmed) {
         $("camBox").classList.add("found");
-        setStatus(`인식: ${pretty(plate)}${usedFlat ? " · 원근 보정" : bestVariant ? " · " + VARIANTS[bestVariant].name + " 보정" : ""}${speedText()}`);
+        setStatus(`인식: ${pretty(plate)}${live.usedFlat ? " · 원근 보정" : live.bestVariant ? " · " + VARIANTS[live.bestVariant].name + " 보정" : ""}${speedText()}`);
         const now = Date.now();
         if (plate !== lastShown || now - lastShownAt > 15000) {
           lastShown = plate; lastShownAt = now;
@@ -1259,7 +1374,7 @@
   }
 
   // 개발·점검용 (주소 끝에 #debug 를 붙였을 때만)
-  if (location.hash === "#debug") window.__plate = { toOcrCanvas, VARIANTS, getWorker, extractPlate, plateCanvas, recognizeAs, findPlateCands, rectifyFrom, readFlat, textRowCands, grayOf, binarized, splitLines };
+  if (location.hash === "#debug") window.__plate = { toOcrCanvas, VARIANTS, getWorker, extractPlate, plateCanvas, recognizeAs, findPlateCands, rectifyFrom, readFlat, textRowCands, liveStep, newLive, stripFrame, grayOf, binarized, splitLines };
 
   $("startCam").addEventListener("click", startCamera);
   $("stopCam").addEventListener("click", stopCamera);
@@ -1278,14 +1393,17 @@
       // 사진은 모든 보정 방법으로 읽어 보고 가장 많이 나온 번호를 고름
       const w = await getWorker();
       const votes = {};
-      // 1) 사진 전체에서 번호판 후보(최대 3개)를 찾아 확대·정면 보정해 읽기
-      const cands = findPlateCands(img, img.width, img.height, null, 3);
+      // 1) 사진 전체에서 번호판 후보(최대 4개, 가운데에 가까운 순)를 찾아 확대·정면 보정해 읽기
+      //    가운데에서 읽힌 번호일수록 표를 많이 줌 → 옆 차 번호판·간판 속 번호보다 가운데 번호판이 이김
+      const cands = findPlateCands(img, img.width, img.height, null, 4);
       for (let i = 0; i < cands.length; i++) {
         $("camLabel").textContent = `번호판 확대해서 읽는 중… ${i + 1}/${cands.length}`;
         const flat = rectifyFrom(img, img.width, img.height, cands[i].quad);
         if (!flat) continue;
         const r = await readFlat(w, flat, true);
-        if (r) votes[r.plate] = (votes[r.plate] || 0) + (knownPlates().has(r.plate) ? 5 : 0) + (r.weak ? 0.5 : 1 + r.agree) - i * 0.3;
+        const cw = cands[i].cw == null ? 1 : cands[i].cw;
+        if (r) votes[r.plate] = (votes[r.plate] || 0) + (knownPlates().has(r.plate) ? 5 : 0) + (r.weak ? 0.5 : 1 + r.agree) * (0.3 + 0.7 * cw) - i * 0.3;
+        if (r && !r.weak && r.agree >= 3 && cw >= 0.8) break;          // 가운데에서 세 번 모두 같게 읽혔으면 충분
       }
       // 2) 번호판을 못 찾았거나 못 읽었으면 예전 방식(사진 전체를 여러 보정으로)
       const candHit = Object.keys(votes).length > 0;

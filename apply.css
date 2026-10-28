@@ -62,6 +62,14 @@ form#applyForm { display: grid; gap: 14px; }
 .date-col .date-chip { width: 100%; }
 .date-chip.sched { opacity: .42; border-style: dashed; cursor: default; }
 .date-open { font-size: 11px; line-height: 1.3; font-weight: 700; text-align: center; color: var(--warn); white-space: nowrap; letter-spacing: -.02em; }
+/* 세 시간대가 모두 찬 날: 붉은색 · 교내 행사 등 예약을 받지 않는 날: 회색(누를 수 없음) */
+.date-chip.full { border-color: var(--bad); background: var(--bad-soft); }
+.date-chip.full .dd { color: var(--bad); }
+.date-full { font-size: 11px; line-height: 1.3; font-weight: 700; text-align: center; color: var(--bad); }
+.date-chip.blocked, .date-chip.blocked:disabled { opacity: 1; background: var(--bg); border-color: var(--line); cursor: not-allowed; }
+.date-chip.blocked .dw, .date-chip.blocked .dd, .date-chip.blocked .dl { color: var(--muted); opacity: .6; }
+.date-chip.blocked .dd { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.date-block { font-size: 11px; line-height: 1.3; font-weight: 700; text-align: center; color: var(--muted); letter-spacing: -.03em; }
 .date-note { margin: 0; font-size: 14px; font-weight: 600; color: var(--warn); }
 .date-note:empty { display: none; }
 #applyForm.dates-only > section:nth-of-type(n+3), #applyForm.dates-only .submit-bar { display: none; }
@@ -86,6 +94,9 @@ form#applyForm { display: grid; gap: 14px; }
 .slot:disabled .left { color: var(--muted); }
 .slot.pre { opacity: .42; border-style: dashed; }
 .slot.pre .left { color: var(--warn); }
+.slot.full, .slot.full:disabled { opacity: 1; border-color: var(--bad); background: var(--bad-soft); }
+.slot.full .left { color: var(--bad); } .slot.full .bar { background: color-mix(in srgb, var(--bad) 25%, transparent); } .slot.full .bar i { background: var(--bad); }
+.slot.full .time { color: var(--bad); }
 
 /* 입력 */
 .field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); min-width: 0; }

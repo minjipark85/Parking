@@ -103,14 +103,20 @@
     var first = new Date(cur.getFullYear(), cur.getMonth(), 1), last = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
     $("calTitle").textContent = cur.getFullYear() + "년 " + (cur.getMonth() + 1) + "월";
     $("calGrid").setAttribute("aria-busy", "true");
-    return sb.rpc("admin_list_dates", { p_from: ymd(first), p_to: ymd(last) }).then(function (r) {
+    // 예약을 받지 않는 날(교내 행사 등)도 함께 — 없거나 DB 업데이트 전이면 빈 목록
+    var blk = sb.rpc("apply_blocked_dates").then(function (b) { return b.error ? [] : (b.data || []); }, function () { return []; });
+    return Promise.all([sb.rpc("admin_list_dates", { p_from: ymd(first), p_to: ymd(last) }), blk]).then(function (both) {
+      var r = both[0];
       if (r.error) throw r.error;
+      blocked = {};
+      both[1].forEach(function (b) { blocked[String(b.block_date).slice(0, 10)] = String(b.label || "예약 불가"); });
       days = {};
       r.data.forEach(function (x) { var v = String(x.day).slice(0, 10); days[v] = x; info[v] = x; });
       renderMonth();
     }).catch(function (e) { console.error(e); $("calGrid").innerHTML = '<p class="muted">달력을 불러오지 못했어요. 다시 시도해 주세요.</p>'; })
       .then(function () { $("calGrid").removeAttribute("aria-busy"); });
   }
+  var blocked = {};                          // { "2026-11-07": "교내 행사 예약 불가" }
   function dayState(x) {
     if (!x || !x.is_open) return "closed";
     return x.opens_at && new Date(x.opens_at) > new Date() ? "sched" : "open";
@@ -121,11 +127,12 @@
     for (var i = 0; i < first.getDay(); i++) html += '<span class="day blank"></span>';
     for (var d = 1; d <= n; d++) {
       var v = ymd(new Date(cur.getFullYear(), cur.getMonth(), d)), x = days[v], st = dayState(x), wd = new Date(cur.getFullYear(), cur.getMonth(), d).getDay();
-      var past = v < t;
-      var label = st === "open" ? "예약 받는 중" : st === "sched" ? stamp(x.opens_at) + " 공개" : "";
-      html += '<button type="button" role="gridcell" class="day ' + st + (past ? " past" : "") + (wd === 0 ? " sun" : wd === 6 ? " sat" : "") + '" data-date="' + v + '" aria-selected="' + (!!selected[v]) + '"' + (past ? ' aria-disabled="true"' : "") +
+      var past = v < t, bl = blocked[v];
+      if (bl) st = "blocked";                                  // 행사 등으로 막은 날: 열어도 신청을 받지 않음
+      var label = bl ? bl : st === "open" ? "예약 받는 중" : st === "sched" ? stamp(x.opens_at) + " 공개" : "";
+      html += '<button type="button" role="gridcell" class="day ' + st + (past || bl ? " past" : "") + (wd === 0 ? " sun" : wd === 6 ? " sat" : "") + '" data-date="' + v + '" aria-selected="' + (!!selected[v]) + '"' + (past ? ' aria-disabled="true"' : "") +
         ' aria-label="' + md(v) + " " + (label || "닫힘") + (x && x.booked ? " 예약 " + x.booked + "건" : "") + '">' +
-        '<span class="n">' + d + '</span><span class="st"><span class="lg">' + label + '</span><span class="sh">' + (st === "open" ? "열림" : st === "sched" ? "예정" : "") + '</span></span>' + (x && x.booked ? '<span class="bk">예약 ' + x.booked + '</span>' : "") +
+        '<span class="n">' + d + '</span><span class="st"><span class="lg">' + esc(label) + '</span><span class="sh">' + (st === "open" ? "열림" : st === "sched" ? "예정" : bl ? "불가" : "") + '</span></span>' + (x && x.booked ? '<span class="bk">예약 ' + x.booked + '</span>' : "") +
         (x && st !== "closed" && x.cap_09 != null ? '<span class="cp" title="시간대별 정원">' + x.cap_09 + "·" + x.cap_12 + "·" + x.cap_15 + '</span>' : "") + '</button>';
     }
     $("calGrid").innerHTML = html;
@@ -145,7 +152,7 @@
     var t = todayStr();
     Array.prototype.forEach.call(document.querySelectorAll(".day[data-date]"), function (b) {
       var wd = parseD(b.dataset.date).getDay();
-      if ((wd === 0 || wd === 6) && b.dataset.date >= t) selected[b.dataset.date] = true;
+      if ((wd === 0 || wd === 6) && b.dataset.date >= t && !blocked[b.dataset.date]) selected[b.dataset.date] = true;
     });
     renderMonth();
   });

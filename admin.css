@@ -166,3 +166,7 @@ body.viewonly .editor-only { display: none; }
 .rep-days .past { opacity: .55; }
 .rep-days .pp { color: var(--muted); }
 #repMore { justify-self: center; }
+
+/* 예약을 받지 않는 날 (교내 행사 등) */
+.day.blocked { background: repeating-linear-gradient(135deg, var(--bg) 0 6px, transparent 6px 12px); border-style: dashed; }
+.day.blocked .lg, .day.blocked .sh { color: var(--muted); font-weight: 700; }

@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="apply.css?v=8">
+  <link rel="stylesheet" href="apply.css?v=9">
   <style>
     :root { --leaf: #c2410c; --leaf-soft: #fdecdf; }
     @media (prefers-color-scheme: dark) { :root { --leaf: #ff9a62; --leaf-soft: #3a2014; } }
@@ -56,6 +56,15 @@
     .slots li { font-family: var(--mono); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; background: var(--bg); }
     .callout { margin-top: 8px !important; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); border: 1px solid var(--warn); font-size: 14px !important; }
 
+    /* 주요 공지사항 */
+    .notice-box { background: var(--surface); border: 1.5px solid var(--leaf); border-radius: 20px; padding: 16px 20px 18px; }
+    .notice-box h2 { margin: 0 0 10px; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--leaf); }
+    .notice-box .ni { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--leaf-soft); flex: none; }
+    .notice-box .ni svg { width: 18px; height: 18px; }
+    .notice-box ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+    .notice-box li { position: relative; padding-left: 16px; font-size: 15px; line-height: 1.55; }
+    .notice-box li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--leaf); }
+
     /* 하단 학교 정보 */
     .foot { text-align: left; margin-top: 6px; border-top: 1px solid var(--line); padding: 22px 4px 0; display: grid; gap: 10px; font-size: 13px; color: var(--muted); }
     .foot .org { display: flex; align-items: center; gap: 12px; color: var(--ink); }
@@ -82,7 +91,7 @@
     </a>
     <a href="pass.html">
       <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="10" r="3"/><path d="M9 16.5h6"/></svg></span>
-      <span><b>실시간 예약확인증</b><span class="sub">인식이 어려울 때 출입구에서 제시</span></span>
+      <span><b>실시간 예약확인증</b><span class="sub">입차시 출입구에서 제시</span></span>
       <span class="arr" aria-hidden="true">›</span>
     </a>
     <a href="https://tinyurl.com/hufspay" target="_blank" rel="noopener">
@@ -91,6 +100,16 @@
       <span class="arr" aria-hidden="true">↗</span>
     </a>
   </nav>
+
+  <section class="notice-box" aria-labelledby="nt">
+    <h2 id="nt"><span class="ni" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4.5M12 17.5v.01"/></svg></span>주요 공지사항</h2>
+    <ul>
+      <li>예약 변경이 불가능하오니 예약 시 반드시 <b>차량 번호를 확인</b>해 주시기 바랍니다.</li>
+      <li>원활한 입차를 위하여 <b>예약확인증</b>을 미리 준비해 주세요.</li>
+      <li><b>11월 8일 이후</b> 차량 1대당 <b>1회 예약</b>만 가능합니다. (중복 예약 불가)</li>
+      <li><b>11월 7일</b>은 교내 행사로 인하여 방문 차량 예약이 불가능합니다.</li>
+    </ul>
+  </section>
 
   <main class="guide" aria-labelledby="gt">
     <h2 class="gt" id="gt">이용 안내</h2>
@@ -109,10 +128,10 @@
       <div>
         <h3 id="g2">운영기간 및 운영일</h3>
         <ul class="facts">
-          <li><span>운영기간</span><span><b>2026년 10월 24일(토) ~ 11월 22일(일)</b>, 주말만 예약 시행</span></li>
-          <li><span>예약 가능</span><span><b>2026년 10월 21일(수) 14시 이후</b></span></li>
+          <li><span>운영기간</span><span><b>2026년 10월 24일(토) ~ 11월 22일(일)</b>, 주말만 예약 시행(11월 7일 제외)</span></li>
+          <li><span>1차 예약</span><span><b>2026년 10월 21일(수) 14시 이후</b></span></li>
+          <li><span>2차 예약</span><span><b>2026년 11월 2일(월) 14시 이후</b></span></li>
         </ul>
-        <p class="note">현재 시험 운영 기간으로, 11월 1일까지만 오픈하며 이후 기간은 추후 오픈합니다.</p>
       </div>
     </section>
 
@@ -131,8 +150,8 @@
       <span class="num" aria-hidden="true">4</span>
       <div>
         <h3 id="g4">주차비 결제</h3>
-        <p>방문 예약 시 주차비를 선결제하여야 합니다.</p>
-        <p class="callout">시험 운영 기간 중 선결제는 시행하지 않으며, 원활한 출차를 위하여 <b>출차 전 사전 결제</b>하여 주시기 바랍니다. (위 <b>주차비 사전 결제</b> 메뉴 이용)</p>
+        <p>방문 차량에 대해 <b>소정의 주차비가 발생</b>합니다.</p>
+        <p class="callout">원활한 출차를 위하여 <b>출차 전 사전 결제</b>하여 주시기 바랍니다. (위 <b>주차비 사전 결제</b> 메뉴 이용)</p>
       </div>
     </section>
   </main>

@@ -35,6 +35,7 @@
   var ERR = {
     full: "방금 이 시간대가 마감됐어요. 다른 시간대를 골라 주세요.",
     duplicate: "이미 예약이 완료되었습니다.",
+    one_per_car: "11월 8일부터는 차량 1대당 한 번만 예약할 수 있어요. 이 차량은 이미 예약돼 있어요. 날짜를 바꾸려면 [내 예약 확인]에서 취소한 뒤 다시 신청해 주세요.",
     dup_day: "이 차량은 이 날짜에 이미 예약돼 있어요. 같은 차량은 하루에 한 번만 예약할 수 있어요. 시간을 바꾸려면 [내 예약 확인]에서 취소한 뒤 다시 신청해 주세요.",
     regular: "정기 등록 차량이에요. 예약 없이 출입할 수 있어요.",
     slot_over: "이미 지난 시간대예요. 다른 시간대를 골라 주세요.",
@@ -78,21 +79,32 @@
 
   // 공개 예정 날짜 { date: "2026-10-24", at: Date } — 공개 시각이 되면 자동으로 다시 불러옴
   var SCHED = [], openTimer = null;
+  // 예약을 받지 않는 날 { date, label } (교내 행사 등 · 회색) · 세 시간대가 모두 마감된 날 (붉은색)
+  var BLOCKED = [], FULL = [];
+  var blockedOf = function (v) { for (var i = 0; i < BLOCKED.length; i++) if (BLOCKED[i].date === v) return BLOCKED[i]; return null; };
+  var isFull = function (v) { return FULL.indexOf(v) >= 0; };
   var schedOf = function (v) { for (var i = 0; i < SCHED.length; i++) if (SCHED[i].date === v) return SCHED[i]; return null; };
   function loadDates() {
     if (!sb) { renderDates(); return Promise.resolve(); }
-    var upcoming = sb.rpc("apply_upcoming_dates").then(function (r) { return r.error ? [] : (r.data || []); }, function () { return []; });
-    return Promise.all([sb.rpc("apply_open_dates"), upcoming]).then(function (both) {
+    var soft = function (fn) { return sb.rpc(fn).then(function (r) { return r.error ? [] : (r.data || []); }, function () { return []; }); };
+    var upcoming = soft("apply_upcoming_dates"), blocked = soft("apply_blocked_dates"), full = soft("apply_full_dates");
+    return Promise.all([sb.rpc("apply_open_dates"), upcoming, blocked, full]).then(function (both) {
       var res = both[0];
       if (res.error) throw res.error;
       OPEN_LIST = (res.data || []).map(function (r) { return String(r && typeof r === "object" ? r.open_date : r).slice(0, 10); });
       SCHED = both[1].map(function (r) { return { date: String(r.open_date).slice(0, 10), at: new Date(String(r.opens_at).replace(/(\.\d{3})\d+/, "$1")) }; })
         .filter(function (x) { return !isNaN(x.at) && OPEN_LIST.indexOf(x.date) < 0; });
+      BLOCKED = both[2].map(function (r) { return { date: String(r.block_date).slice(0, 10), label: String(r.label || "예약 불가") }; })
+        .filter(function (x) { return OPEN_LIST.indexOf(x.date) < 0; });
+      FULL = both[3].map(function (r) { return String(r && typeof r === "object" ? r.open_date : r).slice(0, 10); });
       clearTimeout(openTimer);
       var next = SCHED.reduce(function (m, x) { return !m || x.at < m ? x.at : m; }, null);
       if (next) openTimer = setTimeout(loadDates, Math.min(2147483000, Math.max(1000, next - new Date() + 1500)));
       datesLoaded = true;
-      if (!dateOpen(selDate) && !schedOf(selDate)) { selDate = OPEN_LIST[0] || (SCHED[0] && SCHED[0].date) || ""; selSlot = ""; }
+      // 처음 고를 날짜: 자리가 남은 열린 날 → 열린 날 → 공개 예정일
+      if (!dateOpen(selDate) && !schedOf(selDate)) {
+        selDate = OPEN_LIST.filter(function (v) { return !isFull(v); })[0] || OPEN_LIST[0] || (SCHED[0] && SCHED[0].date) || ""; selSlot = "";
+      }
       renderDates();
       loadSlots();
     }).catch(function (e) {
@@ -108,14 +120,23 @@
   }
   function renderDates() {
     var html = "", t = ymd(today), t1 = new Date(today); t1.setDate(t1.getDate() + 1); t1 = ymd(t1);
-    var items = OPEN_LIST.map(function (v) { return { date: v }; }).concat(SCHED).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    var items = OPEN_LIST.map(function (v) { return { date: v }; }).concat(SCHED)
+      .concat(BLOCKED.map(function (b) { return { date: b.date, block: b.label }; }))
+      .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
     items.forEach(function (it) {
       var v = it.date, d = parseD(v), cls = d.getDay() === 0 ? " sun" : d.getDay() === 6 ? " sat" : "", lb = it.at ? openLabel(it.at) : null;
-      html += '<div class="date-col"><button type="button" class="date-chip' + cls + (lb ? " sched" : "") + '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate) + '"' +
-        (lb ? ' data-open="' + lb.day + " " + lb.time + '" aria-label="' + (d.getMonth() + 1) + "월 " + d.getDate() + "일, " + lb.day + " " + lb.time + ' 오픈 예정"' : "") + '>' +
+      var md = (d.getMonth() + 1) + "월 " + d.getDate() + "일", full = !lb && !it.block && isFull(v);
+      var aria = lb ? md + ", " + lb.day + " " + lb.time + " 오픈 예정" : it.block ? md + ", " + it.block : full ? md + ", 예약 마감" : "";
+      // 예약 불가 사유는 "교내 행사 / 예약 불가"처럼 두 줄로
+      var blockHtml = it.block ? esc(it.block).replace(/\s*(예약\s*불가)$/, "<br>$1") : "";
+      html += '<div class="date-col"><button type="button" class="date-chip' + cls + (lb ? " sched" : "") + (it.block ? " blocked" : "") + (full ? " full" : "") +
+        '" role="radio" data-date="' + v + '" aria-checked="' + (v === selDate && !it.block) + '"' + (it.block ? " disabled" : "") +
+        (lb ? ' data-open="' + lb.day + " " + lb.time + '"' : "") + (aria ? ' aria-label="' + esc(aria) + '"' : "") + '>' +
         '<span class="dw">' + (v === t ? "오늘" : v === t1 ? "내일" : DOW[d.getDay()]) + '</span>' +
         '<span class="dd">' + d.getDate() + '</span><span class="dl">' + (d.getMonth() + 1) + '월</span></button>' +
-        (lb ? '<span class="date-open" aria-hidden="true">' + lb.day + "<br>" + lb.time + " 오픈</span>" : "") + '</div>';
+        (lb ? '<span class="date-open" aria-hidden="true">' + lb.day + "<br>" + lb.time + " 오픈</span>" : "") +
+        (it.block ? '<span class="date-block" aria-hidden="true">' + blockHtml + "</span>" : "") +
+        (full ? '<span class="date-full" aria-hidden="true">마감</span>' : "") + '</div>';
     });
     $("dateStrip").innerHTML = html;
     var none = datesLoaded && !OPEN_LIST.length;
@@ -177,7 +198,8 @@
       var label = pre ? plb.day + " " + plb.time + " 오픈" : past ? "지난 시간" : closed ? "신청 안 받음" : left === 0 ? "마감" : "남은 자리 " + left + " / " + info.cap;
       var pct = info.cap ? Math.min(100, Math.round((info.booked / info.cap) * 100)) : 100;
       var few = !disabled && left <= Math.max(2, Math.ceil(info.cap * 0.2));
-      html += '<button type="button" class="slot' + (few ? " few" : "") + (pre ? " pre" : "") + '" role="radio" data-slot="' + x.s + '" aria-checked="' + (selSlot === x.s) + '"' + (disabled ? " disabled" : "") + '>' +
+      var full = !pre && !past && !closed && left === 0;          // 꽉 찬 시간대는 붉게
+      html += '<button type="button" class="slot' + (few ? " few" : "") + (pre ? " pre" : "") + (full ? " full" : "") + '" role="radio" data-slot="' + x.s + '" aria-checked="' + (selSlot === x.s) + '"' + (disabled ? " disabled" : "") + '>' +
         '<span class="time">' + x.s + ' ~ ' + x.e + '</span><span class="left">' + label + '</span>' +
         '<span class="bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span></button>';
     });

@@ -170,3 +170,13 @@ body.viewonly .editor-only { display: none; }
 /* 예약을 받지 않는 날 (교내 행사 등) */
 .day.blocked { background: repeating-linear-gradient(135deg, var(--bg) 0 6px, transparent 6px 12px); border-style: dashed; }
 .day.blocked .lg, .day.blocked .sh { color: var(--muted); font-weight: 700; }
+
+/* 좌석 수 공개 스위치 */
+.switch-row { position: relative; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; min-height: 44px; justify-self: start; }
+.switch-row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-row .sw { width: 46px; height: 26px; border-radius: 99px; background: var(--line); position: relative; transition: background .15s; flex: none; }
+.switch-row .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: left .15s; }
+.switch-row input:checked + .sw { background: var(--accent); }
+.switch-row input:checked + .sw::after { left: 23px; }
+.switch-row input:focus-visible + .sw { outline: 3px solid var(--accent); outline-offset: 2px; }
+.switch-row input:disabled + .sw { opacity: .5; }

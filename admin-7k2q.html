@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=8">
-  <link rel="stylesheet" href="admin.css?v=17">
+  <link rel="stylesheet" href="admin.css?v=18">
 </head>
 <body>
 <div class="page admin">
@@ -101,6 +101,13 @@
       <h2 id="toolTitle">관리 도구 <span class="muted-in">편집 권한</span></h2>
 
       <div class="tool">
+        <h3>신청 페이지 좌석 수 공개</h3>
+        <p class="muted small">끄면 신청 페이지에 정원·남은 자리 숫자 없이 막대와 "예약 가능 · 마감 임박 · 마감"만 보여요. 꺼 두면 숫자는 DB에서도 보내지 않아요. 바꾸면 신청 페이지에 바로(30초 안에) 반영돼요.</p>
+        <label class="switch-row"><input type="checkbox" id="seatToggle" role="switch" disabled><span class="sw" aria-hidden="true"></span><span id="seatState">불러오는 중…</span></label>
+        <p class="form-error" id="seatError" role="alert"></p>
+      </div>
+
+      <div class="tool">
         <h3>예약·정기 차량 일괄 등록 (CSV)</h3>
         <p class="muted small">한 줄에 하나씩 — <b>예약</b>: 예약일자,예약시간,차량번호 (예: <code>2026-10-24,09:00,12가3456</code>) · <b>정기 차량</b>: 첫 칸에 "정기" (예: <code>정기,,11가1111,관리사무소</code>, 종료일이 있으면 <code>정기,2026-12-31,11가1111,메모</code>) · 엑셀에서 "CSV(쉼표로 분리)"로 저장한 파일도 돼요.</p>
         <label class="file-btn"><span>CSV 파일 고르기</span><input type="file" id="csvFile" accept=".csv,text/csv,text/plain"></label>
@@ -166,6 +173,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=17"></script>
+<script src="admin.js?v=18"></script>
 </body>
 </html>

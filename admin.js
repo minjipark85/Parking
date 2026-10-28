@@ -40,7 +40,7 @@
     $("whoEmail").textContent = email;
     canEdit = false; applyRole();
     checkEditor().then(function (ok) { canEdit = ok; applyRole(); });
-    loadMonth(); loadSummary(); loadStats(); loadRepeat();
+    loadMonth(); loadSummary(); loadStats(); loadRepeat(); loadSettings();
   }
   function applyRole() {
     document.body.classList.toggle("viewonly", !canEdit);
@@ -495,6 +495,31 @@
       console.error(er);
       $("csvError").textContent = missingSql(er) ? "DB 업데이트(supabase-update-1023.sql)를 먼저 실행해 주세요." : "등록하지 못했어요. 편집 권한과 인터넷 연결을 확인해 주세요.";
     }).then(function () { b.disabled = false; if (csvRows) disarmCsv(); });
+  });
+
+  // ---------- 관리 도구: 신청 페이지 좌석 수 공개 ----------
+  function seatLabel(on) { $("seatState").textContent = on ? "공개 중 — 신청 페이지에 \"남은 자리 N / 정원\"이 보여요" : "비공개 — 막대와 예약 가능·마감 임박·마감만 보여요"; }
+  function loadSettings() {
+    sb.rpc("admin_get_settings").then(function (r) {
+      if (r.error) throw r.error;
+      var on = !!(r.data && r.data.show_seat_counts);
+      $("seatToggle").checked = on; $("seatToggle").disabled = false; seatLabel(on); $("seatError").textContent = "";
+    }).catch(function (e) {
+      console.error(e);
+      $("seatState").textContent = "";
+      $("seatError").textContent = missingSql(e) ? "DB 업데이트(supabase-update-1028-seats.sql)를 먼저 실행해 주세요." : "설정을 불러오지 못했어요.";
+    });
+  }
+  $("seatToggle").addEventListener("change", function () {
+    var t = this, want = t.checked;
+    t.disabled = true; $("seatError").textContent = "";
+    sb.rpc("admin_set_show_seats", { p_show: want }).then(function (r) {
+      if (r.error) throw r.error;
+      seatLabel(want);
+    }).catch(function (e) {
+      console.error(e); t.checked = !want; seatLabel(!want);
+      $("seatError").textContent = missingSql(e) ? "DB 업데이트(supabase-update-1028-seats.sql)를 먼저 실행해 주세요." : "바꾸지 못했어요. 편집 권한과 인터넷 연결을 확인해 주세요.";
+    }).then(function () { t.disabled = false; });
   });
 
   // ---------- 관리 도구: 전체 로그아웃 ----------

@@ -174,11 +174,17 @@
       if (my !== slotsReq) return;
       if (res.error) throw res.error;
       avail = {};
-      res.data.forEach(function (r) { avail[String(r.slot).slice(0, 5)] = { cap: r.capacity, booked: r.booked }; });
+      // 좌석 수 비공개(관리자 설정)면 cap·booked 는 비어 오고, 막대 비율(fill)과 상태(state)만 옴
+      res.data.forEach(function (r) {
+        var cap = r.capacity == null ? null : +r.capacity, bk = r.booked == null ? null : +r.booked;
+        var state = r.state || (cap === 0 ? "closed" : bk >= cap ? "full" : cap - bk <= Math.max(2, Math.ceil(cap * 0.2)) ? "few" : "open");
+        var fill = r.fill != null ? +r.fill : cap ? Math.min(100, Math.round((bk / cap) * 100)) : 100;
+        avail[String(r.slot).slice(0, 5)] = { cap: cap, booked: bk, state: state, fill: fill };
+      });
       renderSlots(avail);
     }).catch(function (e) {
       console.error(e);
-      $("slotList").innerHTML = '<p class="muted">남은 자리를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.</p>';
+      $("slotList").innerHTML = '<p class="muted">예약 현황을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.</p>';
     }).then(function () { $("slotList").removeAttribute("aria-busy"); });
   }
   function slotPast(s) {
@@ -187,18 +193,20 @@
     return n.getHours() * 60 + n.getMinutes() >= (+e[0]) * 60 + (+e[1]);
   }
   function renderSlots(a) {
-    if (!a) { $("slotList").innerHTML = '<p class="muted">지금은 남은 자리를 볼 수 없어요.</p>'; return; }
+    if (!a) { $("slotList").innerHTML = '<p class="muted">지금은 예약 현황을 볼 수 없어요.</p>'; return; }
     var html = "", pre = schedOf(selDate), plb = pre ? openLabel(pre.at) : null;
     SLOTS.forEach(function (x) {
-      var info = a[x.s] || { cap: 0, booked: 0 };
-      var left = Math.max(0, info.cap - info.booked);
-      var past = slotPast(x.s), closed = info.cap === 0;
-      var disabled = !!pre || past || left === 0;
+      var info = a[x.s] || { cap: null, booked: null, state: "closed", fill: 100 };
+      var counts = info.cap != null && info.booked != null;       // 좌석 수 공개 설정일 때만 숫자를 보여 줌
+      var past = slotPast(x.s), closed = info.state === "closed", soldOut = info.state === "full";
+      var disabled = !!pre || past || closed || soldOut;
       if (disabled && selSlot === x.s) selSlot = "";
-      var label = pre ? plb.day + " " + plb.time + " 오픈" : past ? "지난 시간" : closed ? "신청 안 받음" : left === 0 ? "마감" : "남은 자리 " + left + " / " + info.cap;
-      var pct = info.cap ? Math.min(100, Math.round((info.booked / info.cap) * 100)) : 100;
-      var few = !disabled && left <= Math.max(2, Math.ceil(info.cap * 0.2));
-      var full = !pre && !past && !closed && left === 0;          // 꽉 찬 시간대는 붉게
+      var label = pre ? plb.day + " " + plb.time + " 오픈" : past ? "지난 시간" : closed ? "신청 안 받음" : soldOut ? "마감"
+        : counts ? "남은 자리 " + Math.max(0, info.cap - info.booked) + " / " + info.cap
+        : info.state === "few" ? "마감 임박" : "예약 가능";
+      var pct = Math.max(0, Math.min(100, info.fill));
+      var few = !disabled && info.state === "few";
+      var full = !pre && !past && soldOut;                        // 꽉 찬 시간대는 붉게
       html += '<button type="button" class="slot' + (few ? " few" : "") + (pre ? " pre" : "") + (full ? " full" : "") + '" role="radio" data-slot="' + x.s + '" aria-checked="' + (selSlot === x.s) + '"' + (disabled ? " disabled" : "") + '>' +
         '<span class="time">' + x.s + ' ~ ' + x.e + '</span><span class="left">' + label + '</span>' +
         '<span class="bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span></button>';

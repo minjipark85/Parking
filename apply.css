@@ -63,8 +63,8 @@ form#applyForm { display: grid; gap: 14px; }
 .date-chip.sched { opacity: .42; border-style: dashed; cursor: default; }
 .date-open { font-size: 11px; line-height: 1.3; font-weight: 700; text-align: center; color: var(--warn); white-space: nowrap; letter-spacing: -.02em; }
 /* 세 시간대가 모두 찬 날: 붉은색 · 교내 행사 등 예약을 받지 않는 날: 회색(누를 수 없음) */
-.date-chip.full { border-color: var(--bad); background: var(--bad-soft); }
-.date-chip.full .dd { color: var(--bad); }
+.date-chip.full { border-color: var(--line); background: var(--surface); }
+.date-chip.full .dd, .date-chip.full .dw, .date-chip.full .dl { color: var(--muted); }
 .date-full { font-size: 11px; line-height: 1.3; font-weight: 700; text-align: center; color: var(--bad); }
 .date-chip.blocked, .date-chip.blocked:disabled { opacity: 1; background: var(--bg); border-color: var(--line); cursor: not-allowed; }
 .date-chip.blocked .dw, .date-chip.blocked .dd, .date-chip.blocked .dl { color: var(--muted); opacity: .6; }
@@ -78,6 +78,7 @@ form#applyForm { display: grid; gap: 14px; }
 .closed h2 { color: var(--bad); }
 .date-chip[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .date-chip[aria-checked="true"] .dw, .date-chip[aria-checked="true"] .dl { color: var(--accent-ink); }
+.date-chip.full[aria-checked="true"] .dd, .date-chip.full[aria-checked="true"] .dw, .date-chip.full[aria-checked="true"] .dl { color: var(--accent-ink); }
 .other-date { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
 .other-date input { min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); }
 
@@ -94,9 +95,7 @@ form#applyForm { display: grid; gap: 14px; }
 .slot:disabled .left { color: var(--muted); }
 .slot.pre { opacity: .42; border-style: dashed; }
 .slot.pre .left { color: var(--warn); }
-.slot.full, .slot.full:disabled { opacity: 1; border-color: var(--bad); background: var(--bad-soft); }
-.slot.full .left { color: var(--bad); } .slot.full .bar { background: color-mix(in srgb, var(--bad) 25%, transparent); } .slot.full .bar i { background: var(--bad); }
-.slot.full .time { color: var(--bad); }
+.slot.full .bar i { background: var(--bad); }   /* 마감: 신청 안 받음과 같은 흐린 칸, 막대만 붉게 */
 
 /* 입력 */
 .field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); min-width: 0; }

@@ -504,6 +504,7 @@
       if (r.error) throw r.error;
       var on = !!(r.data && r.data.show_seat_counts);
       $("seatToggle").checked = on; $("seatToggle").disabled = false; seatLabel(on); $("seatError").textContent = "";
+      renderRate(r.data || {});
     }).catch(function (e) {
       console.error(e);
       $("seatState").textContent = "";
@@ -584,6 +585,32 @@
     }).then(function () { b.disabled = !canEdit; });
   });
   setInterval(function () { if (!$("adminView").hidden && !document.hidden && !evDirty) loadEvent(); }, 60000);
+
+  // ---------- 관리 도구: 같은 접속지 신청 제한 ----------
+  function renderRate(d) {
+    if (d.rl_max == null) { $("rlStat").textContent = ""; $("rlError").textContent = "DB 업데이트(supabase-update-1030-ratelimit.sql)를 먼저 실행해 주세요."; return; }
+    if (document.activeElement !== $("rlMax") && document.activeElement !== $("rlMin")) { $("rlMax").value = d.rl_max; $("rlMin").value = d.rl_minutes; }
+    ["rlMax", "rlMin", "rlSave"].forEach(function (id) { $(id).disabled = false; });
+    var bl = d.rl_blocked_24h || 0;
+    $("rlStat").innerHTML = (d.rl_max > 0 ? "지금 기준: " + d.rl_minutes + "분에 " + d.rl_max + "건" : "<b>꺼져 있음</b>") +
+      " · 최근 24시간 막힌 신청 <b" + (bl ? ' class="hot"' : "") + ">" + bl.toLocaleString() + "</b>건 (통과 " + (d.rl_ok_24h || 0).toLocaleString() + "건)" +
+      (d.my_ip ? " · DB가 보는 내 접속지 " + esc(d.my_ip) : "");
+    $("rlError").textContent = "";
+  }
+  $("rlSave").addEventListener("click", function () {
+    var mx = $("rlMax").value.trim(), mn = $("rlMin").value.trim(), b = this;
+    if (!/^\d+$/.test(mx) || +mx > 1000) { $("rlError").textContent = "건수는 0~1000 사이 숫자로 넣어 주세요."; return; }
+    if (!/^\d+$/.test(mn) || +mn < 1 || +mn > 1440) { $("rlError").textContent = "시간은 1~1440분 사이로 넣어 주세요."; return; }
+    b.disabled = true; $("rlError").textContent = "";
+    sb.rpc("admin_set_rate_limit", { p_max: +mx, p_minutes: +mn }).then(function (r) {
+      if (r.error) throw r.error;
+      renderRate(r.data || {}); toast("저장했어요. 다음 신청부터 바로 적용돼요.", "rlToast");
+    }).catch(function (e) {
+      console.error(e);
+      $("rlError").textContent = missingSql(e) ? "DB 업데이트(supabase-update-1030-ratelimit.sql)를 먼저 실행해 주세요." : "저장하지 못했어요. 편집 권한과 인터넷 연결을 확인해 주세요.";
+    }).then(function () { b.disabled = false; });
+  });
+  setInterval(function () { if (!$("adminView").hidden && !document.hidden && canEdit) loadSettings(); }, 60000);
 
   // ---------- 관리 도구: 전체 로그아웃 ----------
   $("logoutAll").addEventListener("click", function () {

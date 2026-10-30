@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=8">
-  <link rel="stylesheet" href="admin.css?v=19">
+  <link rel="stylesheet" href="admin.css?v=20">
 </head>
 <body>
 <div class="page admin">
@@ -126,6 +126,19 @@
       </div>
 
       <div class="tool">
+        <h3>같은 접속지 신청 제한</h3>
+        <p class="muted small">한 인터넷 연결(IP)에서 짧은 시간에 예약이 몰리면(프로그램 대량 신청 등) "잠시 후 다시" 안내로 막아요. 명수당·세민전 합쳐서, 성공한 예약만 세요. 휴대폰 통신사나 학교 와이파이는 여러 사람이 같은 IP를 쓰기도 하니, <b>예약 오픈 직후 "막힌 신청"이 늘면 건수를 올려 주세요.</b> 0건 = 끔.</p>
+        <div class="rl-row">
+          <label>같은 IP에서 <input type="number" id="rlMin" min="1" max="1440" step="1" inputmode="numeric" disabled> 분에</label>
+          <label><input type="number" id="rlMax" min="0" max="1000" step="1" inputmode="numeric" disabled> 건까지</label>
+          <button type="button" class="small" id="rlSave" disabled>저장</button>
+        </div>
+        <p class="rl-stat" id="rlStat"></p>
+        <p class="form-error" id="rlError" role="alert"></p>
+        <p class="toast" id="rlToast" role="status"></p>
+      </div>
+
+      <div class="tool">
         <h3>예약·정기 차량 일괄 등록 (CSV)</h3>
         <p class="muted small">한 줄에 하나씩 — <b>예약</b>: 예약일자,예약시간,차량번호 (예: <code>2026-10-24,09:00,12가3456</code>) · <b>정기 차량</b>: 첫 칸에 "정기" (예: <code>정기,,11가1111,관리사무소</code>, 종료일이 있으면 <code>정기,2026-12-31,11가1111,메모</code>) · 엑셀에서 "CSV(쉼표로 분리)"로 저장한 파일도 돼요.</p>
         <label class="file-btn"><span>CSV 파일 고르기</span><input type="file" id="csvFile" accept=".csv,text/csv,text/plain"></label>
@@ -191,6 +204,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=19"></script>
+<script src="admin.js?v=20"></script>
 </body>
 </html>

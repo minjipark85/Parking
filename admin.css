@@ -196,3 +196,10 @@ body.viewonly .editor-only { display: none; }
 .ev-at input { min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); color: var(--ink); }
 .ev-hint { margin: 0; }
 .ev-ctrl .primary { justify-self: start; min-width: 120px; }
+
+/* 같은 접속지 신청 제한 */
+.rl-row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.rl-row label { display: inline-flex; align-items: center; gap: 6px; }
+.rl-row input { width: 80px; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 16px; text-align: right; }
+.rl-stat { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.rl-stat b { color: var(--ink); } .rl-stat b.hot { color: var(--bad); }

@@ -39,8 +39,8 @@
     $("loginView").hidden = true; $("adminView").hidden = false; $("who").hidden = false;
     $("whoEmail").textContent = email;
     canEdit = false; applyRole();
-    checkEditor().then(function (ok) { canEdit = ok; applyRole(); });
-    loadMonth(); loadSummary(); loadStats(); loadRepeat(); loadSettings();
+    checkEditor().then(function (ok) { canEdit = ok; applyRole(); renderEvent(); });
+    loadMonth(); loadSummary(); loadStats(); loadRepeat(); loadSettings(); loadEvent();
   }
   function applyRole() {
     document.body.classList.toggle("viewonly", !canEdit);
@@ -316,7 +316,7 @@
   }
 
   // ---------- 접속 현황 ----------
-  var PAGE_NAME = { index: "안내", apply: "신청", pass: "확인증" };
+  var PAGE_NAME = { index: "안내", apply: "신청", pass: "확인증", semin: "세민전" };
   function loadStats() {
     if ($("adminView").hidden || document.hidden) return;
     sb.rpc("admin_view_stats", { p_days: 7 }).then(function (r) {
@@ -326,7 +326,7 @@
       var lp = d.live_pages || {};
       $("sLivePages").textContent = Object.keys(lp).length ? Object.keys(lp).map(function (k) { return (PAGE_NAME[k] || k) + " " + lp[k]; }).join(" · ") : "최근 5분";
       $("sViews").textContent = (today.views || 0).toLocaleString();
-      $("sViewPages").textContent = "안내 " + (today.v_index || 0) + " · 신청 " + (today.v_apply || 0) + " · 확인증 " + (today.v_pass || 0);
+      $("sViewPages").textContent = "안내 " + (today.v_index || 0) + " · 신청 " + (today.v_apply || 0) + " · 확인증 " + (today.v_pass || 0) + (today.v_semin ? " · 세민전 " + today.v_semin : "");
       $("sVisitors").textContent = (today.visitors || 0).toLocaleString();
       var nowH = new Date().getHours(), hmax = Math.max.apply(null, hours.map(function (h) { return h.views || 0; }).concat([1]));
       $("sHours").innerHTML = hours.map(function (h) {
@@ -521,6 +521,69 @@
       $("seatError").textContent = missingSql(e) ? "DB 업데이트(supabase-update-1028-seats.sql)를 먼저 실행해 주세요." : "바꾸지 못했어요. 편집 권한과 인터넷 연결을 확인해 주세요.";
     }).then(function () { t.disabled = false; });
   });
+
+  // ---------- 세민전 예약 (행사 전용 시간대) ----------
+  var EVENT = "semin", evData = null, evDirty = false;
+  var localInput = function (iso) { if (!iso) return ""; var d = new Date(String(iso).replace(/(\.\d{3})\d+/, "$1")); return isNaN(d) ? "" : ymd(d) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+  function loadEvent() {
+    sb.rpc("admin_event_get", { p_code: EVENT }).then(function (r) {
+      if (r.error) throw r.error;
+      evData = r.data; evDirty = false; $("evError").textContent = "";
+      renderEvent();
+    }).catch(function (e) {
+      console.error(e); evData = null;
+      $("evInfo").textContent = missingSql(e) ? "DB 업데이트(supabase-update-1030-semin.sql)를 먼저 실행해 주세요." : "불러오지 못했어요.";
+    });
+  }
+  function evStateOf(d) {
+    if (!d) return ["", ""];
+    if (String(d.date).slice(0, 10) < todayStr()) return ["", "지난 행사"];
+    if (!d.is_open) return ["", "닫힘"];
+    if (d.opens_at && new Date(String(d.opens_at).replace(/(\.\d{3})\d+/, "$1")) > new Date()) return ["sched", "공개 예정 · " + stamp(d.opens_at)];
+    return ["open", "예약 받는 중"];
+  }
+  function renderEvent() {
+    var d = evData;
+    if (!d) { if (!$("evInfo").textContent) $("evInfo").textContent = "세민전 행사가 DB에 없어요."; return; }
+    var st = evStateOf(d), cap = 0;
+    $("evState").className = "ev-state " + st[0]; $("evState").textContent = st[1];
+    d.slots.forEach(function (x) { cap += x.capacity; });
+    $("evInfo").innerHTML = "<b>" + esc(d.title) + " · " + md(String(d.date).slice(0, 10)) + "</b> · 예약 <b>" + (d.booked || 0).toLocaleString() + "</b>건 / 정원 " + cap.toLocaleString();
+    if (!evDirty) {
+      $("evCaps").innerHTML = '<legend class="sr">시간대별 정원</legend>' + (d.slots.length ? d.slots.map(function (x) {
+        return '<label class="cap"><span>' + esc(x.start) + "~" + esc(x.end) + '</span><input type="number" min="0" max="100000" step="1" inputmode="numeric" data-id="' + x.id + '" data-v="' + x.capacity + '" value="' + x.capacity + '"><small class="' + (x.booked > x.capacity ? "over" : "") + '">예약 ' + x.booked + "건</small></label>";
+      }).join("") : '<p class="muted small">시간대가 없어요. Table Editor → event_slots 에 넣어 주세요.</p>');
+      $("evOpen").checked = !!d.is_open; $("evOpensAt").value = localInput(d.opens_at);
+    }
+    $("evOpenTxt").textContent = $("evOpen").checked ? "예약 받기 — 켜짐" : "예약 받기 — 꺼짐 (신청 페이지에 \"예약을 받지 않아요\")";
+    $("evCaps").disabled = !canEdit;
+    ["evOpen", "evOpensAt", "evSave", "evAtClear"].forEach(function (id) { $(id).disabled = !canEdit; });
+  }
+  $("evCaps").addEventListener("input", function (e) { if (e.target.dataset.id) { evDirty = true; e.target.classList.toggle("chg", e.target.value !== e.target.dataset.v); } });
+  $("evOpen").addEventListener("change", function () { evDirty = true; renderEvent(); });
+  $("evOpensAt").addEventListener("input", function () { evDirty = true; });
+  $("evAtClear").addEventListener("click", function () { $("evOpensAt").value = ""; evDirty = true; });
+  $("evSave").addEventListener("click", function () {
+    var b = this, caps = [], bad = false;
+    Array.prototype.forEach.call($("evCaps").querySelectorAll("input[data-id]"), function (i) {
+      var v = i.value.trim();
+      if (!/^\d+$/.test(v) || +v > 100000) bad = true;
+      caps.push({ id: +i.dataset.id, capacity: +v });
+    });
+    if (bad) { $("evError").textContent = "정원은 0~100000 사이 숫자로 넣어 주세요."; return; }
+    var at = $("evOpensAt").value ? new Date($("evOpensAt").value) : null;
+    if (at && isNaN(at)) { $("evError").textContent = "공개 일시를 확인해 주세요."; return; }
+    b.disabled = true; $("evError").textContent = "";
+    sb.rpc("admin_event_save", { p_code: EVENT, p_open: $("evOpen").checked, p_opens_at: at ? at.toISOString() : null, p_caps: caps }).then(function (r) {
+      if (r.error) throw r.error;
+      evData = r.data; evDirty = false; renderEvent();
+      toast("저장했어요. 세민전 신청 페이지에 30초 안에 반영돼요.", "evToast");
+    }).catch(function (e) {
+      console.error(e);
+      $("evError").textContent = missingSql(e) ? "DB 업데이트(supabase-update-1030-semin.sql)를 먼저 실행해 주세요." : /편집 권한/.test(e.message || "") ? "편집 권한이 있는 관리자만 바꿀 수 있어요." : "저장하지 못했어요. 인터넷 연결을 확인해 주세요.";
+    }).then(function () { b.disabled = !canEdit; });
+  });
+  setInterval(function () { if (!$("adminView").hidden && !document.hidden && !evDirty) loadEvent(); }, 60000);
 
   // ---------- 관리 도구: 전체 로그아웃 ----------
   $("logoutAll").addEventListener("click", function () {

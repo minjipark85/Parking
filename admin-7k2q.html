@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
   <link rel="stylesheet" href="apply.css?v=8">
-  <link rel="stylesheet" href="admin.css?v=18">
+  <link rel="stylesheet" href="admin.css?v=19">
 </head>
 <body>
 <div class="page admin">
@@ -97,6 +97,24 @@
       </div>
     </section>
 
+    <section class="step ev-box" aria-labelledby="evTitle">
+      <div class="stat-head">
+        <h2 id="evTitle">세민전 예약 <span class="muted-in">별도 신청 페이지</span></h2>
+        <span class="ev-state" id="evState"></span>
+      </div>
+      <p class="ev-info" id="evInfo">불러오는 중…</p>
+      <fieldset class="caps ev-caps" id="evCaps" disabled><legend class="sr">시간대별 정원</legend></fieldset>
+      <div class="ev-ctrl editor-only">
+        <label class="switch-row"><input type="checkbox" id="evOpen" role="switch" disabled><span class="sw" aria-hidden="true"></span><span id="evOpenTxt">예약 받기</span></label>
+        <label class="ev-at">공개 일시 <input type="datetime-local" id="evOpensAt" disabled><button type="button" class="small" id="evAtClear">비우기</button></label>
+        <p class="muted small ev-hint">공개 일시를 비우면 "예약 받기"를 켜는 즉시 열려요. 일시를 넣으면 그때부터 신청할 수 있어요.</p>
+        <button type="button" class="primary" id="evSave" disabled>저장</button>
+      </div>
+      <p class="form-error" id="evError" role="alert"></p>
+      <p class="toast" id="evToast" role="status"></p>
+      <p class="muted small">정원 0 = 그 시간대는 신청 안 받음. 시간대(시작·끝 시각)와 날짜는 Supabase Table Editor → <code>event_slots</code> · <code>events</code> 에서 고쳐요. 세민전 예약은 위 달력·명수당 정원 숫자에 들어가지 않아요.</p>
+    </section>
+
     <section class="step tools editor-only" aria-labelledby="toolTitle">
       <h2 id="toolTitle">관리 도구 <span class="muted-in">편집 권한</span></h2>
 
@@ -173,6 +191,6 @@
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
-<script src="admin.js?v=18"></script>
+<script src="admin.js?v=19"></script>
 </body>
 </html>

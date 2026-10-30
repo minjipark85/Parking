@@ -286,6 +286,8 @@
   });
 
   // ---------- 내 예약 확인·취소 ----------
+  // 행사(세민전 등) 예약은 그 행사의 시간대(시작~끝)로 보여 줌
+  var mySlot = function (r) { return r.reserve_end ? String(r.reserve_time).slice(0, 5) + " ~ " + String(r.reserve_end).slice(0, 5) : slotLabel(r.reserve_time); };
   function loadMine() {
     var plate = norm($("mPlate").value), phone = digits($("mPhone").value);
     $("mineError").textContent = "";
@@ -300,7 +302,7 @@
         // 예약한 시간대가 시작됐으면 취소 버튼 대신 안내
         var startAt = new Date(String(r.reserve_date).slice(0, 10) + "T" + String(r.reserve_time).slice(0, 5) + ":00+09:00");
         var started = Date.now() >= startAt.getTime();
-        return '<div class="my-item' + (started ? " started" : "") + '" data-id="' + esc(r.id) + '"><span class="when">' + dateLabel(String(r.reserve_date)) + ' · ' + slotLabel(r.reserve_time) + '</span>' +
+        return '<div class="my-item' + (started ? " started" : "") + '" data-id="' + esc(r.id) + '"><span class="when">' + dateLabel(String(r.reserve_date)) + ' · ' + mySlot(r) + (r.event ? ' <span class="ev-tag">' + esc(r.event) + '</span>' : "") + '</span>' +
           '<span class="acts"><button type="button" class="to-pass">확인증</button>' + (started ? '<span class="no-cancel" title="' + CANCEL_STARTED + '">취소 불가</span>' : '<button type="button" class="cancel">취소</button>') + '</span>' +
           (started ? '<span class="started-note">' + CANCEL_STARTED + '</span>' : '') +
           '<span class="meta"><span class="mini-plate" style="font-size:15px">' + esc(r.plate) + '</span> · 예약번호 <span class="mono">' + esc(r.code) + '</span></span></div>';
@@ -331,6 +333,17 @@
   // ---------- 시작 ----------
   updateSummary();
   loadDates();
+  // 주소가 apply.html#mine 이면 [내 예약 확인]으로 시작 (세민전 신청 페이지에서 넘어올 때 #mine&p=차량번호&t=연락처)
+  (function () {
+    var h = location.hash.replace(/^#/, "");
+    if (!/^mine(&|$)/.test(h)) return;
+    var q = {}; h.split("&").slice(1).forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+    try { history.replaceState(null, "", location.pathname + location.search + "#mine"); } catch (e) {}   // 연락처를 주소창·방문 기록에 남기지 않음
+    if (q.p) $("mPlate").value = pretty(q.p);
+    if (q.t) $("mPhone").value = fmtPhone(q.t);
+    show("mine");
+    if (q.p && q.t) loadMine();
+  })();
   // 남은 자리 30초마다, 열린 날짜(관리자가 새로 열거나 공개 시각이 된 날)는 1분마다 새로 불러옴
   setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadSlots(); }, 30000);
   setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadDates(); }, 60000);

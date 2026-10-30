@@ -149,6 +149,7 @@ button:focus-visible, .date-chip:focus-visible, .slot:focus-visible { outline: 3
 #mineForm { align-items: end; }
 .my-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
 .my-item .when { font-weight: 700; }
+.ev-tag { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; vertical-align: 2px; }
 .my-item .meta { font-size: 13px; color: var(--muted); }
 .my-item .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 8px; }
 .my-item button { min-height: 44px; font-size: 14px; padding: 0 14px; }

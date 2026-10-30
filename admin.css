@@ -180,3 +180,19 @@ body.viewonly .editor-only { display: none; }
 .switch-row input:checked + .sw::after { left: 23px; }
 .switch-row input:focus-visible + .sw { outline: 3px solid var(--accent); outline-offset: 2px; }
 .switch-row input:disabled + .sw { opacity: .5; }
+
+/* 세민전 예약 칸 */
+.ev-box .stat-head h2 { margin-bottom: 0; }
+.ev-state { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: var(--bg); color: var(--muted); }
+.ev-state.open { background: var(--ok-soft, #e3f4ea); color: var(--ok); }
+.ev-state.sched { background: var(--warn-soft, #fdf1dc); color: var(--warn); }
+.ev-info { margin: 8px 0 12px; font-size: 14px; color: var(--muted); }
+.ev-info b { color: var(--ink); }
+.ev-caps { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); margin-bottom: 14px; }
+.ev-caps[disabled] { opacity: 1; }
+.ev-caps[disabled] input { background: transparent; border-style: dashed; }
+.ev-ctrl { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.ev-at { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.ev-at input { min-height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--bg); color: var(--ink); }
+.ev-hint { margin: 0; }
+.ev-ctrl .primary { justify-self: start; min-width: 120px; }

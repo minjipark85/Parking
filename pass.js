@@ -24,6 +24,8 @@
   var SLOTS = [{ s: "09:00", e: "12:00" }, { s: "12:00", e: "15:00" }, { s: "15:00", e: "18:00" }];
   var toMin = function (t) { var p = String(t).split(":"); return Number(p[0]) * 60 + Number(p[1]); };
   var slotOf = function (t) { var s = String(t).slice(0, 5); for (var i = 0; i < SLOTS.length; i++) if (SLOTS[i].s === s) return SLOTS[i]; return { s: s, e: pad(Math.min(23, Number(s.slice(0, 2)) + 3)) + ":" + s.slice(3) }; };
+  // 행사(세민전 등) 예약은 DB가 보내 준 끝 시각(end)까지, 명수당은 시작 + 3시간
+  var winOf = function (r) { var sl = slotOf(r.slot); return r.end ? { s: sl.s, e: String(r.end).slice(0, 5) } : sl; };
   var dateLabel = function (s) { var p = String(s).slice(0, 10).split("-").map(Number), d = new Date(Date.UTC(p[0], p[1] - 1, p[2])); return p[1] + "월 " + p[2] + "일 (" + DOW[d.getUTCDay()] + ")"; };
   var span = function (mins) { var h = Math.floor(mins / 60), m = mins % 60; return ((h ? h + "시간 " : "") + (m ? m + "분" : "")).trim() || "1분 미만"; };
 
@@ -56,12 +58,12 @@
     }
     var todays = list.filter(function (r) { return String(r.date).slice(0, 10) === now.date; });
     var stateOf = function (r) {
-      var sl = slotOf(r.slot), a = toMin(sl.s), b = toMin(sl.e);
+      var sl = winOf(r), a = toMin(sl.s), b = toMin(sl.e);
       if (now.min < a) return { k: "before", t: span(a - now.min) + " 후 시작" };
       if (now.min >= b) return { k: "after", t: "시간대 종료" };
       return { k: "now", t: "종료까지 " + span(b - now.min) };
     };
-    var slotTxt = function (r) { var sl = slotOf(r.slot); return sl.s + " ~ " + sl.e; };
+    var slotTxt = function (r) { var sl = winOf(r); return sl.s + " ~ " + sl.e + (r.event ? " · " + esc(r.event) : ""); };
     var live = todays.filter(function (r) { return stateOf(r).k === "now"; })[0];
     if (live) {
       return { s: "ok", text: "입차 가능 · 예약 시간대", info: row("방문일", dateLabel(live.date) + " · 오늘") + row("시간대", slotTxt(live) + "<small>" + stateOf(live).t + "</small>", "hit") + row("예약번호", '<span class="mono">' + esc(live.code) + "</span>"), sub: "" };
@@ -177,6 +179,19 @@
   if (!sb) { $("setupNotice").hidden = false; $("setupNotice").textContent = "지금은 확인증을 열 수 없어요. (DB 연결 정보가 없어요)"; }
   var qs = (location.search.match(/[?&]plate=([^&]+)/) || [])[1];
   var qPlate = qs ? norm(decodeURIComponent(qs)) : "";
+  // 세민전 신청 페이지에서 넘어올 때: pass.html#pass&p=차량번호&t=연락처 → 이 휴대폰에 저장하고 주소에서 지움
+  (function () {
+    var h = location.hash.replace(/^#/, ""), q = {};
+    if (!/^pass&/.test(h)) return;
+    h.split("&").slice(1).forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) q[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    if (q.p && PLATE_RE.test(norm(q.p))) {
+      var c = { plate: norm(q.p), phone: digits(q.t) };
+      var old = read(KEY);
+      if (!old || old.plate !== c.plate || old.phone !== c.phone) write(CACHE, null);
+      write(KEY, c); qPlate = "";
+    }
+  })();
   creds = read(KEY);
   if (creds && (!creds.plate || (qPlate && qPlate !== creds.plate))) creds = null;
   if (creds) {

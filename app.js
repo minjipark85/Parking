@@ -35,10 +35,13 @@
     { s: "15:00", e: "18:00" },
   ];
   const slotOf = (t) => { const m = toMin(t); return SLOTS.find((x) => m >= toMin(x.s) && m < toMin(x.e)) || null; };
-  const slotLabel = (t) => { const s = slotOf(t); return s ? `${s.s}~${s.e}` : hhmm(t); };
+  // 예약 한 건의 입차 가능 시간: 행사(세민전 등) 예약은 DB의 시작~끝(r.e), 명수당은 위 세 시간대
+  const winOf = (r) => (typeof r === "string" ? slotOf(r) : r.e ? { s: r.t, e: r.e } : slotOf(r.t));
+  const evName = (r) => (r && r.ev ? (store.evNames && store.evNames[r.ev]) || "행사" : "");
+  const slotLabel = (r) => { const s = winOf(r), n = evName(r); return (s ? `${s.s}~${s.e}` : hhmm(r.t || r)) + (n ? ` · ${n}` : ""); };
   const span = (mins) => { const h = Math.floor(mins / 60), m = mins % 60; return ((h ? `${h}시간 ` : "") + (m ? `${m}분` : "")).trim() || "1분 미만"; };
-  function slotState(t) {
-    const s = slotOf(t);
+  function slotState(r) {
+    const s = winOf(r);
     if (!s) return { state: "other", text: "시간대 밖 예약" };
     const n = nowMin(), a = toMin(s.s), b = toMin(s.e);
     if (n < a) return { state: "before", text: `${span(a - n)} 후 시작` };
@@ -117,15 +120,28 @@
       if (!(await checkStaff())) { syncing = false; await signOutAll("로그인이 해제됐어요. 다시 로그인해 주세요. (전체 로그아웃 또는 직원 명단 변경)"); return; }
       const from = new Date(); from.setDate(from.getDate() - 1);   // 어제부터 앞으로의 예약만 저장
       const rows = [];
+      // 행사(세민전 등) 예약은 끝 시각(reserve_end)과 행사 코드(event_code)도 받음 — DB 업데이트 전이면 예전 칸만
+      let cols = "reserve_date,reserve_time,reserve_end,event_code,plate_key";
       for (let page = 0; page < 20; page++) {                       // 최대 20,000건
         const { data, error } = await sb.from(TABLE)
-          .select("reserve_date,reserve_time,plate_key")
+          .select(cols)
           .gte("reserve_date", ymd(from))
           .order("reserve_date").order("reserve_time")
           .range(page * 1000, page * 1000 + 999);
+        if (error && page === 0 && cols.includes("event_code") && /42703|reserve_end|event_code/.test((error.code || "") + (error.message || ""))) {
+          cols = "reserve_date,reserve_time,plate_key"; page--; continue;
+        }
         if (error) throw error;
-        data.forEach((r) => rows.push({ d: r.reserve_date, t: hhmm(r.reserve_time), p: norm(r.plate_key), src: "db" }));
+        data.forEach((r) => {
+          const v = { d: r.reserve_date, t: hhmm(r.reserve_time), p: norm(r.plate_key), src: "db" };
+          if (r.event_code) { v.ev = r.event_code; v.e = hhmm(r.reserve_end || r.reserve_time); }
+          rows.push(v);
+        });
         if (data.length < 1000) break;
+      }
+      if (rows.some((r) => r.ev)) {                                   // 행사 이름 (예: semin → 세민전)
+        const ev = await sb.from("events").select("code,title");
+        if (!ev.error && ev.data) { store.evNames = {}; ev.data.forEach((x) => { store.evNames[x.code] = x.title; }); }
       }
       store.db = rows;
       // 정기 차량 목록 (표가 아직 없으면 건너뜀)
@@ -242,15 +258,15 @@
     const todays = matches.filter((r) => r.d === today);
 
     // 🟢 오늘 + 지금 시간대
-    const live = todays.find((r) => slotState(r.t).state === "now");
+    const live = todays.find((r) => slotState(r).state === "now");
     if (live) {
       showResult("ok", `<div class="verdict"><span class="dot"></span>입차 가능 · 예약 시간대입니다</div><div>${label}</div>` +
-        `<ul class="sub"><li><b style="font-family:var(--mono)">${esc(slotLabel(live.t))}</b><span>${slotState(live.t).text}</span></li></ul>${now}`);
+        `<ul class="sub"><li><b style="font-family:var(--mono)">${esc(slotLabel(live))}</b><span>${slotState(live).text}</span></li></ul>${now}`);
       return;
     }
     // 🟡 오늘 예약이지만 시간대가 아님
     if (todays.length) {
-      const items = todays.map((r) => `<li><b style="font-family:var(--mono)">${esc(slotLabel(r.t))}</b><span>${slotState(r.t).text}</span></li>`).join("");
+      const items = todays.map((r) => `<li><b style="font-family:var(--mono)">${esc(slotLabel(r))}</b><span>${slotState(r).text}</span></li>`).join("");
       showResult("warn", `<div class="verdict"><span class="dot"></span>오늘 예약 · 시간대가 아니에요</div><div>${label}</div><ul class="sub">${items}</ul>${now}`);
       return;
     }
@@ -259,9 +275,9 @@
     const past = matches.filter((r) => r.d < today).reverse();
     let detail = "";
     if (future.length) {
-      detail = `<div class="sub">예약일: <b>${fmtDate(future[0].d)} ${esc(slotLabel(future[0].t))}</b>${future.length > 1 ? ` 외 ${future.length - 1}건` : ""}</div>`;
+      detail = `<div class="sub">예약일: <b>${fmtDate(future[0].d)} ${esc(slotLabel(future[0]))}</b>${future.length > 1 ? ` 외 ${future.length - 1}건` : ""}</div>`;
     } else if (past.length) {
-      detail = `<div class="sub">지난 예약: ${fmtDate(past[0].d)} ${esc(slotLabel(past[0].t))}</div>`;
+      detail = `<div class="sub">지난 예약: ${fmtDate(past[0].d)} ${esc(slotLabel(past[0]))}</div>`;
     } else {
       detail = `<div class="sub">이 번호로 저장된 예약이 없어요.</div>`;
       const l4 = last4(q);
@@ -272,7 +288,7 @@
         .filter((r) => !seen.has(r.p) && seen.add(r.p)).slice(0, 4);
       if (near.length) {
         detail += `<div class="sub">인식이 틀렸을 수 있어요. 혹시 이 차량인가요?</div><div class="suggest">` +
-          near.map((r) => `<button type="button" class="suggest-btn" data-plate="${esc(r.p)}"><span class="mini-plate">${esc(pretty(r.p))}</span><span>${r.reg ? "정기 차량" : esc(slotLabel(r.t))}</span></button>`).join("") +
+          near.map((r) => `<button type="button" class="suggest-btn" data-plate="${esc(r.p)}"><span class="mini-plate">${esc(pretty(r.p))}</span><span>${r.reg ? "정기 차량" : esc(slotLabel(r))}</span></button>`).join("") +
           `</div>`;
       }
       if (!PLATE_RE.test(q)) detail += `<div class="sub">번호 형식이 일반적이지 않아요. 다시 확인해 주세요.</div>`;
@@ -1476,9 +1492,10 @@
       html += `<div class="day"><div class="day-label">${fmtDate(d)}${d === today ? '<span class="tag">오늘</span>' : ""}<span>· ${dayN[d]}대</span></div>`;
       for (const r of rs) {
         let chip = "<span></span>";
-        if (d === today) { const [cls, txt] = CHIP[slotState(r.t).state]; chip = `<span class="chip ${cls}">${txt}</span>`; }
-        const sl = slotOf(r.t), sc = sl ? " s" + sl.s.slice(0, 2) : "";   // 시간대별 바탕색 (s09·s12·s15)
-        html += `<div class="row${sc}"><span class="t">${esc(slotLabel(r.t))}</span><span><span class="mini-plate">${esc(pretty(r.p))}</span></span>${chip}</div>`;
+        if (d === today) { const [cls, txt] = CHIP[slotState(r).state]; chip = `<span class="chip ${cls}">${txt}</span>`; }
+        const sl = r.e ? null : slotOf(r.t), sc = sl ? " s" + sl.s.slice(0, 2) : r.e ? " sev" : "";   // 시간대별 바탕색 (s09·s12·s15 · 행사 sev)
+        const tt = r.ev ? `${esc(r.t)}~${esc(r.e)}<small class="ev">${esc(evName(r))}</small>` : esc(slotLabel(r));
+        html += `<div class="row${sc}"><span class="t">${tt}</span><span><span class="mini-plate">${esc(pretty(r.p))}</span></span>${chip}</div>`;
       }
       html += `</div>`;
     }

@@ -26,6 +26,12 @@
     .rep-idx { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
     .rep-row mark { background: #ffe58a; color: inherit; border-radius: 3px; }
     #dMore { justify-self: center; }
+    .period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+    .period input[type="date"] { min-height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; font: inherit; font-weight: 500; background: var(--surface); color: inherit; }
+    .period .tilde { color: var(--muted); }
+    .period .quick { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+    .period .quick button { min-height: 42px; }
+    .period-note { margin: -4px 0 12px; font-size: 13px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -57,12 +63,23 @@
 
   <main id="mainView" hidden>
     <section class="step">
+      <div class="period" role="group" aria-label="중복 판정 기간 (예약일 기준)">
+        <span>예약일</span>
+        <input type="date" id="dFrom" aria-label="시작일">
+        <span class="tilde">~</span>
+        <input type="date" id="dTo" aria-label="종료일">
+        <span class="quick">
+          <button type="button" class="small" id="pFrom1108">11/8부터</button>
+          <button type="button" class="small" id="pAll">전체 기간</button>
+        </span>
+      </div>
+      <p class="period-note" id="periodNote"></p>
       <div class="stat-head">
         <h2>한눈에 보기</h2>
         <span class="muted" id="dAt"></span>
       </div>
       <div class="tiles">
-        <div class="tile"><span class="t-label">오픈 좌석</span><b id="tSeats">–</b><span class="t-sub">공개된 날짜 정원 합계</span></div>
+        <div class="tile"><span class="t-label">오픈 좌석</span><b id="tSeats">–</b><span class="t-sub" id="tSeatsSub">공개된 날짜 정원 합계</span></div>
         <div class="tile"><span class="t-label">예약</span><b id="tBook">–</b><span class="t-sub" id="tBookSub"></span></div>
         <div class="tile warn"><span class="t-label" id="tDupLabel">중복 추정 인원</span><b id="tDup">–</b><span class="t-sub" id="tDupSub"></span></div>
         <div class="tile warn"><span class="t-label">중복이 차지한 자리</span><b id="tExtra">–</b><span class="t-sub" id="tExtraSub"></span></div>
@@ -148,9 +165,31 @@
 
   // ---------- 데이터 ----------
   var by = "phone", data = null, shown = 100, filtered = [];
+  // ---------- 중복 판정 기간 (예약일 기준) — 고른 기간은 이 기기에 기억 ----------
+  var PKEY = "dup-period-v1", ONE_PER_CAR = "2026-11-08";
+  (function () {
+    var v = null; try { v = JSON.parse(localStorage.getItem(PKEY)); } catch (e) {}
+    $("dFrom").value = v && typeof v.from === "string" ? v.from : ONE_PER_CAR;     // 처음엔 11/8(차량 1대 1회 시작일)부터
+    $("dTo").value = v && typeof v.to === "string" ? v.to : "";
+  })();
+  var periodText = function () {
+    var f = $("dFrom").value, t = $("dTo").value;
+    return !f && !t ? "전체 기간" : (f ? md(f) : "처음") + " ~ " + (t ? md(t) : "끝");
+  };
+  function setPeriod(f, t) {
+    $("dFrom").value = f; $("dTo").value = t;
+    try { localStorage.setItem(PKEY, JSON.stringify({ from: f, to: t })); } catch (e) {}
+    load();
+  }
+  ["dFrom", "dTo"].forEach(function (id) { $(id).addEventListener("change", function () { setPeriod($("dFrom").value, $("dTo").value); }); });
+  $("pFrom1108").addEventListener("click", function () { setPeriod(ONE_PER_CAR, ""); });
+  $("pAll").addEventListener("click", function () { setPeriod("", ""); });
   function load() {
+    var f = $("dFrom").value || null, t = $("dTo").value || null;
+    if (f && t && f > t) { $("periodNote").textContent = "시작일이 종료일보다 늦어요. 날짜를 다시 골라 주세요."; return; }
+    $("periodNote").textContent = f || t ? "이 기간에 예약일이 있는 예약만 세요: " + periodText() + " (기간 밖 예약은 횟수·일정에서 빠져요)" : "전체 기간의 예약을 세요.";
     $("dAt").textContent = "불러오는 중…";
-    sb.rpc("admin_dup_detail", { p_by: by, p_min: +$("dMin").value }).then(function (r) {
+    sb.rpc("admin_dup_detail", { p_by: by, p_min: +$("dMin").value, p_from: f, p_to: t }).then(function (r) {
       if (r.error) throw r.error;
       data = r.data || {}; shown = 100; render();
       $("dAt").textContent = stamp(new Date().toISOString()) + " 기준";
@@ -163,6 +202,7 @@
   function tiles() {
     var d = data, unit = by === "plate" ? "대" : "명";
     $("tSeats").textContent = num(d.seats);
+    $("tSeatsSub").textContent = (d.from || d.to ? "기간 안 " : "") + "공개된 날짜 정원 합계";
     $("tBook").textContent = num(d.bookings);
     $("tBookSub").textContent = d.seats ? "좌석의 " + Math.round(d.bookings / d.seats * 100) + "% 찼어요" : "";
     $("tDupLabel").textContent = by === "plate" ? "중복 추정 차량" : "중복 추정 인원";
@@ -189,7 +229,7 @@
     var q = $("dFind").value.replace(/[\s-]/g, "").toLowerCase(), qRaw = $("dFind").value.trim().toLowerCase();
     var rows = data.rows || [], min = +$("dMin").value, unit = by === "plate" ? "대" : "명", today = ymd(new Date());
     filtered = rows.filter(function (x) { return matches(x, q); });
-    $("dSum").innerHTML = min + "회 이상 <b>" + num(data.count) + "</b>" + unit + (q ? " 중 검색 결과 <b>" + num(filtered.length) + "</b>" + unit : "");
+    $("dSum").innerHTML = "<span class=\"muted\">" + esc(periodText()) + " · </span>" + min + "회 이상 <b>" + num(data.count) + "</b>" + unit + (q ? " 중 검색 결과 <b>" + num(filtered.length) + "</b>" + unit : "");
     if (!filtered.length) { $("dList").innerHTML = '<p class="muted">' + (q ? "찾는 결과가 없어요." : "해당하는 " + (by === "plate" ? "차량이" : "사람이") + " 없어요.") + "</p>"; $("dMore").hidden = true; return; }
     $("dList").innerHTML = filtered.slice(0, shown).map(function (x, i) {
       var who;
@@ -247,7 +287,8 @@
     var blob = new Blob(["﻿" + lines.map(function (r) { return r.map(c).join(","); }).join("\r\n")], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "dup_" + by + "_" + ymd(new Date()).replace(/-/g, "") + ".csv";
+    var pr = ($("dFrom").value || $("dTo").value) ? "_" + ($("dFrom").value || "start").replace(/-/g, "") + "-" + ($("dTo").value || "end").replace(/-/g, "") : "_all";
+    a.download = "dup_" + by + pr + "_" + ymd(new Date()).replace(/-/g, "") + ".csv";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   });

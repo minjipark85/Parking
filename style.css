@@ -322,3 +322,7 @@ body.locked .grid, body.locked .top-right .net, body.locked #fsBtn { display: no
 .zoom-ctl button:active { background: rgba(255, 255, 255, .15); }
 .zoom-ctl span { min-width: 48px; text-align: center; font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 .zoom-hint { position: absolute; top: 58px; left: 10px; z-index: 3; background: rgba(0, 0, 0, .6); color: #ffffff; font-size: 13px; padding: 4px 10px; border-radius: 99px; pointer-events: none; }
+
+/* 행사 담당자(세민전 등) 계정 — 그 행사 예약만 판정 */
+.scope-badge { padding: 2px 9px; border-radius: 99px; background: #0f5a3a; color: #f1d78f; font-size: 12px; font-weight: 700; white-space: nowrap; }
+body.ev-mode .ledger-top .slots { display: none; }          /* 명수당 시간대 색 안내는 숨김 */

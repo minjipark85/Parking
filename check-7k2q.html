@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body class="locked">
 <div class="app">
@@ -25,6 +25,7 @@
       <div class="net" id="netStatus" data-s="info"><i></i><span>준비 중…</span></div>
       <div class="today" id="today"></div>
       <div class="account" id="account" hidden>
+        <b class="scope-badge" id="scopeBadge" hidden></b>
         <span id="accountEmail"></span>
         <button type="button" class="icon-btn" id="logoutBtn">로그아웃</button>
       </div>
@@ -101,7 +102,7 @@
 
       <div class="panel ledger-panel">
         <div class="ledger-top">
-          <h2>예약 현황</h2>
+          <h2 id="ledgerTitle">예약 현황</h2>
           <div class="slots" aria-label="예약 시간대 색"><b class="s09">09~12</b><b class="s12">12~15</b><b class="s15">15~18</b></div>
         </div>
         <div class="ledger-head">
@@ -122,6 +123,6 @@
 <script src="supabase.js"></script>
 <script src="tesseract.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

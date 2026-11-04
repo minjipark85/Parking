@@ -111,6 +111,9 @@
 
   let syncing = false, lastSyncError = false, lastQuery = "";
   let unlocked = false;                // 직원 로그인 전에는 예약을 보여주지 않음
+  // 행사 담당자(예: 세민전) 계정이면 { event: "semin", title: "세민전" } — 그 행사 예약만 판정 · 일반 직원은 event 가 null
+  let scope = { event: null, title: "" };
+  const evMode = () => !!scope.event;
   async function sync() {
     if (!sb || syncing || !unlocked) return;
     if (!navigator.onLine) { renderNet(); return; }
@@ -133,6 +136,7 @@
         }
         if (error) throw error;
         data.forEach((r) => {
+          if (evMode() && r.event_code !== scope.event) return;      // 행사 담당자: 그 행사 예약만 (DB도 같은 규칙으로 막음)
           const v = { d: r.reserve_date, t: hhmm(r.reserve_time), p: norm(r.plate_key), src: "db" };
           if (r.event_code) { v.ev = r.event_code; v.e = hhmm(r.reserve_end || r.reserve_time); }
           rows.push(v);
@@ -148,10 +152,12 @@
       // Supabase는 한 번에 최대 1,000줄만 주므로 1,000줄씩 나눠서 끝까지 받음 (최대 100,000대)
       const regs = []; let regErr = null;
       for (let page = 0; page < 100; page++) {
-        const { data, error } = await sb.from(REG_TABLE)
-          .select("plate_key,memo,valid_from,valid_until")
-          .order("plate_key")
-          .range(page * 1000, page * 1000 + 999);
+        const { data, error } = evMode()
+          ? await sb.rpc("staff_regular_plates", { p_offset: page * 1000, p_limit: 1000 })     // 행사 담당자: 메모 없이 번호·기간만
+          : await sb.from(REG_TABLE)
+            .select("plate_key,memo,valid_from,valid_until")
+            .order("plate_key")
+            .range(page * 1000, page * 1000 + 999);
         if (error) { regErr = error; break; }
         data.forEach((r) => {                       // 저장 공간을 아끼려고 빈 칸은 넣지 않음
           const v = { p: norm(r.plate_key) };
@@ -295,7 +301,7 @@
     }
     if (expiredReg) detail += `<div class="sub">정기 차량이지만 등록 기간이 아니에요 (${[expiredReg.from && fmtDate(expiredReg.from) + "부터", expiredReg.until && fmtDate(expiredReg.until) + "까지"].filter(Boolean).join(" ")})</div>`;
     if (sb && !navigator.onLine) detail += `<div class="sub">※ 오프라인: ${store.syncedAt ? fmtStamp(store.syncedAt) : "-"}에 받은 예약 기준</div>`;
-    showResult("bad", `<div class="verdict"><span class="dot"></span>오늘 예약이 아닙니다</div><div>${label}</div>${detail}`);
+    showResult("bad", `<div class="verdict"><span class="dot"></span>${evMode() ? `오늘 ${esc(scope.title)} 예약이 아닙니다` : "오늘 예약이 아닙니다"}</div><div>${label}</div>${detail}`);
   }
 
   $("checkBtn").addEventListener("click", () => check());
@@ -1530,6 +1536,22 @@
     if (error) throw error;
     return data === true;
   }
+  // 일반 직원 / 행사 담당자 (DB 업데이트 전이면 일반 직원)
+  async function loadScope() {
+    const { data, error } = await sb.rpc("staff_scope");
+    if (error) { if (/PGRST202|42883|Could not find the function/i.test((error.message || "") + (error.code || ""))) return { event: null, title: "" }; throw error; }
+    return { event: (data && data.event) || null, title: (data && data.title) || "" };
+  }
+  function setScope(sc) {
+    scope = { event: sc.event || null, title: sc.title || "" };
+    if ((store.scope || null) !== scope.event) {            // 이 기기에 저장된 예약이 다른 권한으로 받은 것이면 지우고 새로 받음
+      store.db = []; store.regDb = []; store.syncedAt = 0; store.scope = scope.event; saveStore();
+    }
+    document.body.classList.toggle("ev-mode", evMode());
+    $("ledgerTitle").textContent = evMode() ? `${scope.title} 예약 현황` : "예약 현황";
+    $("scopeBadge").hidden = !evMode();
+    $("scopeBadge").textContent = evMode() ? `${scope.title} 전용` : "";
+  }
   function wipeLocal() {
     store.db = []; store.regDb = []; store.file = []; store.regFile = [];
     store.syncedAt = 0; store.fileName = ""; store.fileAt = 0;
@@ -1559,7 +1581,7 @@
   }
   async function signOutAll(message) {
     try { await sb.auth.signOut({ scope: "local" }); } catch (e) {}
-    writeAuth(null); wipeLocal();
+    writeAuth(null); wipeLocal(); setScope({ event: null, title: "" });
     lock(message);
   }
 
@@ -1578,14 +1600,14 @@
 
     if (session) {
       try {
-        if (await checkStaff()) { writeAuth({ email: session.user.email, at: Date.now() }); unlock(session.user.email, false); }
+        if (await checkStaff()) { const sc = await loadScope(); setScope(sc); writeAuth({ email: session.user.email, at: Date.now(), event: sc.event, title: sc.title }); unlock(session.user.email, false); }
         else await signOutAll("로그인이 해제됐어요. 다시 로그인해 주세요. (전체 로그아웃 또는 직원 명단 변경)");
       } catch (e) {                          // 인터넷이 안 되면 마지막 확인 기록으로 계속 사용
-        if (saved) unlock(saved.email, true); else lock("인터넷에 연결된 상태에서 로그인해 주세요.");
+        if (saved) { setScope({ event: saved.event, title: saved.title }); unlock(saved.email, true); } else lock("인터넷에 연결된 상태에서 로그인해 주세요.");
       }
       return;
     }
-    if (saved && (netErr || !navigator.onLine)) { unlock(saved.email, true); return; }
+    if (saved && (netErr || !navigator.onLine)) { setScope({ event: saved.event, title: saved.title }); unlock(saved.email, true); return; }
     if (saved) { writeAuth(null); wipeLocal(); }   // 로그인이 풀린 기기 → 저장 예약도 지움
     lock();
   }
@@ -1604,7 +1626,8 @@
         return;
       }
       if (!(await checkStaff())) { await signOutAll("직원 명단에 없는 계정이에요. 관리자에게 등록을 요청하세요."); return; }
-      writeAuth({ email: data.user.email, at: Date.now() });
+      const sc = await loadScope(); setScope(sc);
+      writeAuth({ email: data.user.email, at: Date.now(), event: sc.event, title: sc.title });
       $("lPass").value = "";
       unlock(data.user.email, false);
     } catch (ex) {

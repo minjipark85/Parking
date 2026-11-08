@@ -354,3 +354,8 @@ body.cam-off .manual { order: 2; } body.cam-off .result { order: 3; } body.cam-o
   body.cam-off .legend { grid-column: 1; grid-row: 4; }
   body.cam-off .ledger-panel { grid-column: 2; grid-row: 1 / -1; min-height: 0; }
 }
+
+/* ---------- 숫자/한글 자판 전환 버튼 (터치 기기에서만) ---------- */
+.plate .kbd-toggle { display: none; flex: none; align-self: center; min-height: 0; height: 40px; min-width: 46px; margin-right: 8px; padding: 0 10px;
+  font: 700 16px/1 var(--body); color: #1d4fb0; background: #eef3fc; border: 1px solid #c4d3ef; border-radius: 9px; box-shadow: none; }
+@media (pointer: coarse) { .plate .kbd-toggle { display: block; } }

@@ -354,9 +354,36 @@
       dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
     return dp[a.length][b.length];
   }
-  $("plateInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); check(); } });
+  $("plateInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); check(); selectPlateSoon(); } });
   // 숫자 4자리를 다 치면 바로 확인 (번호판 앞부분은 항상 한글이 섞여 있어서, 숫자만 4자리는 뒷자리 입력뿐)
-  $("plateInput").addEventListener("input", () => { if (/^\d{4}$/.test(norm($("plateInput").value))) check(); });
+  $("plateInput").addEventListener("input", () => { if (/^\d{4}$/.test(norm($("plateInput").value))) { check(); selectPlateSoon(); } });
+  // 휴대폰·태블릿: 기본은 숫자 자판(뒷자리 4자리 입력용). [가] 버튼을 누르면 이번 입력만 한글 자판으로
+  const plateIn = $("plateInput"), kbdBtn = $("kbdToggle");
+  function setKbd(mode) {
+    plateIn.setAttribute("inputmode", mode);
+    const num = mode === "numeric";
+    kbdBtn.textContent = num ? "가" : "123";
+    kbdBtn.setAttribute("aria-label", num ? "한글 자판으로 바꾸기" : "숫자 자판으로 바꾸기");
+  }
+  // 버튼을 눌러도 입력칸 포커스가 빠지지 않게
+  let kbdToText = false, kbdSwitching = false;
+  kbdBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+  kbdBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  kbdBtn.addEventListener("click", () => {
+    const toText = plateIn.getAttribute("inputmode") === "numeric";
+    plateIn.blur();                                   // 자판 종류는 다시 포커스될 때 바뀜
+    setKbd(toText ? "text" : "numeric");
+    kbdToText = toText;
+    kbdSwitching = true; plateIn.focus(); kbdSwitching = false;   // 치던 내용은 그대로 두고 이어서 입력
+  });
+  // 입력칸을 벗어나면 다음 차량을 위해 다시 숫자 자판으로
+  plateIn.addEventListener("blur", () => { setTimeout(() => { if (document.activeElement !== plateIn) { kbdToText = false; setKbd("numeric"); } }, 0); });
+  // 이미 확인한 번호가 들어 있으면, 칸을 누를 때 전체 선택 → 바로 다음 번호를 치면 덮어써짐
+  plateIn.addEventListener("focus", () => {
+    if (kbdSwitching || kbdToText || !plateIn.value) return;
+    selectPlateSoon();
+  });
+  function selectPlateSoon() { setTimeout(() => { if (document.activeElement === plateIn) try { plateIn.setSelectionRange(0, plateIn.value.length); } catch (e) {} }, 0); }
 
   // ---------- 화면 꺼짐 방지 · 전체 화면 ----------
   let wakeLock = null;

@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=24">
 </head>
 <body class="locked cam-off">
 <div class="app">
@@ -76,7 +76,8 @@
       <div class="manual">
         <div class="plate">
           <div class="strip" aria-hidden="true">KOR</div>
-          <input id="plateInput" autocomplete="off" spellcheck="false" placeholder="12가 3456" aria-label="차량번호">
+          <input id="plateInput" autocomplete="off" spellcheck="false" placeholder="12가 3456" aria-label="차량번호" inputmode="numeric" enterkeyhint="search">
+          <button type="button" class="kbd-toggle" id="kbdToggle" aria-label="한글 자판으로 바꾸기">가</button>
         </div>
         <button class="primary" id="checkBtn" type="button">예약 확인</button>
         <label class="btn" id="camBtn">
@@ -123,6 +124,6 @@
 <script src="supabase.js"></script>
 <script src="tesseract.min.js"></script>
 <script src="config.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>

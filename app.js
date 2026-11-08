@@ -1178,6 +1178,7 @@
   // --- 실시간 카메라 인식 ---
   const video = $("video");
   let stream = null, timer = null, busy = false;
+  let camGen = 0;   // 카메라를 켜고 끌 때마다 1씩 증가 — 끄기 전에 시작한 인식 결과는 버림
   let lastShown = "", lastShownAt = 0;
   let avgMs = 0;                // 한 번 읽는 데 걸리는 평균 시간
   // 실시간 인식 상태
@@ -1205,6 +1206,7 @@
       showResult("bad", `<div class="verdict"><span class="dot"></span>카메라를 켜지 못했어요</div><div class="sub">브라우저의 카메라 권한을 허용한 뒤 다시 눌러 주세요.</div>`);
       return;
     }
+    camGen++;
     document.body.classList.remove("cam-off");   // 카메라 화면 펼치기
     video.srcObject = stream;
     video.muted = true;
@@ -1236,7 +1238,9 @@
   }
 
   function stopCamera() {
+    camGen++;
     clearInterval(timer); timer = null;
+    clearTimeout(foundHideTimer); foundHideTimer = null;
     try { $("plateMark").hidden = true; $("plateZoom").hidden = true; } catch (e) {}
     if (stream) stream.getTracks().forEach((t) => t.stop());
     stream = null;
@@ -1407,6 +1411,7 @@
   async function scanFrame() {
     if (busy || !stream || video.readyState < 2 || document.hidden) return;
     busy = true;
+    const gen = camGen;
     const t0 = performance.now();
     try {
       const vw = video.videoWidth, vh = video.videoHeight;
@@ -1427,6 +1432,8 @@
       const toBox = (x, y) => [((x * scale - ox) - bw / 2) * dz + bw / 2, ((y * scale - oy) - bh / 2) * dz + bh / 2];
       const w = await getWorker();
       const st = await liveStep(live, w, video, vw, vh, fullCrop, crop);
+      // 인식하는 동안(약 0.5~1초) 카메라를 껐으면 결과를 화면에 그리지 않음 — 안 그러면 번호판 테두리·확대 보기가 남음
+      if (gen !== camGen || !stream) return;
       if (location.hash === "#debug") (window.__frames = window.__frames || []).push({ vw, vh, fullCrop, ci: st.ci, read: st.read, conf: st.confirmed, n: st.cands, q: st.cd && st.cd.quad.map((p) => p.map(Math.round)), text: st.cd && st.cd.text });
       if (st.cd) { if (st.ci === 0 || st.read) showFound(st.cd.quad.map((p) => toBox(p[0], p[1])), st.flat, !!st.read); }
       else if (!st.cands) showFound(null);

@@ -359,3 +359,6 @@ body.cam-off .manual { order: 2; } body.cam-off .result { order: 3; } body.cam-o
 .plate .kbd-toggle { display: none; flex: none; align-self: center; min-height: 0; height: 40px; min-width: 46px; margin-right: 8px; padding: 0 10px;
   font: 700 16px/1 var(--body); color: #1d4fb0; background: #eef3fc; border: 1px solid #c4d3ef; border-radius: 9px; box-shadow: none; }
 @media (pointer: coarse) { .plate .kbd-toggle { display: block; } }
+/* 카메라가 꺼져 있을 때는 인식 표시(테두리·확대 보기·상태 문구·줌)가 절대 보이지 않게 */
+body.cam-off .cam .plate-mark, body.cam-off .cam .plate-zoom, body.cam-off .cam-status, body.cam-off .cam-stop,
+body.cam-off .zoom-ctl, body.cam-off .zoom-hint { display: none !important; }

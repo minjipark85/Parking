@@ -235,9 +235,42 @@
       $("plateInput").focus();
       return;
     }
-    lastQuery = q;
     const rows = allRows();
     const today0 = todayStr();
+
+    // 뒷자리 4자리만 입력: 오늘 예약 + 지금 유효한 정기 차량 중 그 번호가 한 대뿐이면 그 차량으로 바꿔서 판정
+    if (/^\d{4}$/.test(q)) {
+      const seen4 = new Set();
+      const cands = rows.filter((r) => r.d === today0 && last4(r.p) === q).map((r) => ({ p: r.p, r }))
+        .concat(activeRegs().filter((r) => last4(r.p) === q).map((r) => ({ p: r.p, reg: true })))
+        .filter((c) => { const k = c.p.replace(/^[가-힣]{2}(?=\d)/, ""); return !seen4.has(k) && seen4.add(k); });
+      if (cands.length === 1) {
+        $("plateInput").value = pretty(cands[0].p);
+        lastShown = cands[0].p; lastShownAt = Date.now();
+        check(silent);
+        const v = $("result").querySelector(".verdict");
+        if (v) v.insertAdjacentHTML("afterend", `<div class="sub found4">뒷자리 ${esc(q)}로 찾은 차량이에요. 번호판과 같은지 확인해 주세요.</div>`);
+        return;
+      }
+      lastQuery = q;
+      const btn = (c) => `<button type="button" class="suggest-btn" data-plate="${esc(c.p)}"><span class="mini-plate">${esc(pretty(c.p))}</span><span>${c.reg ? "정기 차량" : esc(slotLabel(c.r)) + (c.r.d === today0 ? "" : " · " + esc(fmtDate(c.r.d)))}</span></button>`;
+      if (cands.length > 1) {
+        showResult("info", `<div class="verdict"><span class="dot"></span>뒷자리 ${esc(q)} 차량이 ${cands.length}대예요</div>` +
+          `<div class="sub">번호판과 같은 차량을 눌러 주세요.</div><div class="suggest">${cands.slice(0, 8).map(btn).join("")}</div>`);
+        return;
+      }
+      // 오늘 예약·정기 차량에 없음 → 다른 날 예약이 있으면 함께 보여 줌
+      const seenO = new Set();
+      const others = rows.filter((r) => last4(r.p) === q).sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t))
+        .filter((r) => !seenO.has(r.p) && seenO.add(r.p)).slice(0, 4).map((r) => ({ p: r.p, r }));
+      showResult("bad", `<div class="verdict"><span class="dot"></span>${evMode() ? `오늘 ${esc(scope.title)} 예약이 아닙니다` : "오늘 예약이 아닙니다"}</div>` +
+        `<div class="sub">오늘 예약과 정기 차량 중에 뒷자리 ${esc(q)} 차량이 없어요.</div>` +
+        (others.length ? `<div class="sub">다른 날 예약이 있는 차량:</div><div class="suggest">${others.map(btn).join("")}</div>` : "") +
+        `<div class="sub">현재 시각 ${nowHHMM()}</div>`);
+      return;
+    }
+
+    lastQuery = q;
 
     // 🔵 정기 차량: 예약과 상관없이 출입 가능 (가장 먼저 확인)
     const reg = allRegs().find((r) => regMatch(r, q) && regActive(r, today0));
@@ -322,6 +355,8 @@
     return dp[a.length][b.length];
   }
   $("plateInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); check(); } });
+  // 숫자 4자리를 다 치면 바로 확인 (번호판 앞부분은 항상 한글이 섞여 있어서, 숫자만 4자리는 뒷자리 입력뿐)
+  $("plateInput").addEventListener("input", () => { if (/^\d{4}$/.test(norm($("plateInput").value))) check(); });
 
   // ---------- 화면 꺼짐 방지 · 전체 화면 ----------
   let wakeLock = null;

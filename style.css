@@ -328,3 +328,29 @@ body.locked .grid, body.locked .top-right .net, body.locked #fsBtn { display: no
 body.ev-mode .ledger-top .slots { display: none; }          /* 명수당 시간대 색 안내는 숨김 */
 /* 뒷자리 4자리로 찾은 차량 안내 */
 .result .found4 { color: var(--warn, #9a5b00); font-weight: 600; }
+
+/* ---------- 카메라 꺼짐: "카메라 켜기" 버튼 한 줄만 (카메라를 켜면 원래 배치로) ---------- */
+body.cam-off .cam { aspect-ratio: auto; flex: none; min-height: 0; background: transparent; border: 0; overflow: visible; }
+body.cam-off .cam video, body.cam-off .cam .guide { display: none; }
+body.cam-off .cam-idle { position: static; background: transparent; padding: 0; display: block; }
+body.cam-off .cam-idle p { display: none; }
+body.cam-off #startCam { width: 100%; min-height: 46px; font-size: 15px; font-weight: 600; background: var(--surface); color: var(--ink); border: 1px dashed var(--line); box-shadow: none; display: flex; align-items: center; justify-content: center; gap: 8px; }
+body.cam-off #startCam::before { content: ""; width: 18px; height: 18px; background: currentColor; opacity: .7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z'/%3E%3Ccircle cx='12' cy='13' r='4'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z'/%3E%3Ccircle cx='12' cy='13' r='4'/%3E%3C/svg%3E") center / contain no-repeat; }
+/* 휴대폰: 카메라 버튼 → 번호 입력 → 결과 순 */
+body.cam-off .manual { order: 2; } body.cam-off .result { order: 3; } body.cam-off .legend { order: 4; }
+/* 태블릿 세로: 위쪽은 버튼과 입력만, 아래를 결과·현황이 채움 */
+@media (min-width: 700px) and (orientation: portrait) {
+  body.cam-off .grid { grid-template-rows: auto minmax(0, 1fr); }
+}
+/* 태블릿 가로: 왼쪽 = 버튼·입력·결과(크게), 오른쪽 = 예약 현황 */
+@media (min-width: 900px), (orientation: landscape) and (min-width: 600px) {
+  body.cam-off .grid { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  body.cam-off .col { display: contents; }
+  body.cam-off .cam { grid-column: 1; grid-row: 1; }
+  body.cam-off .manual { grid-column: 1; grid-row: 2; }
+  body.cam-off .result { grid-column: 1; grid-row: 3; }
+  body.cam-off .legend { grid-column: 1; grid-row: 4; }
+  body.cam-off .ledger-panel { grid-column: 2; grid-row: 1 / -1; min-height: 0; }
+}

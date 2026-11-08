@@ -1178,6 +1178,7 @@
       showResult("bad", `<div class="verdict"><span class="dot"></span>카메라를 켜지 못했어요</div><div class="sub">브라우저의 카메라 권한을 허용한 뒤 다시 눌러 주세요.</div>`);
       return;
     }
+    document.body.classList.remove("cam-off");   // 카메라 화면 펼치기
     video.srcObject = stream;
     video.muted = true;
     video.setAttribute("playsinline", "");
@@ -1216,6 +1217,7 @@
     $("camIdle").hidden = false;
     $("camIdle").style.display = "";
     $("camStatus").hidden = true;
+    document.body.classList.add("cam-off");      // 꺼지면 '카메라 켜기' 버튼 한 줄만
     $("stopCam").hidden = true;
     $("camBox").classList.remove("found", "live");
     $("camBox").dataset.s = "idle";

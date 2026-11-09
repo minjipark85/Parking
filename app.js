@@ -225,7 +225,8 @@
   }
 
   // ---------- 조회 (신호등) — 기기에 저장된 예약으로 즉시 판정 ----------
-  function check(silent) {
+  // cam: 카메라·사진이 뒷자리 4자리만 확실히 읽었을 때 { fronts: 읽힌 앞자리 숫자 후보 } — 손으로 친 뒷자리보다 엄격하게 판정
+  function check(silent, cam) {
     if (!unlocked) return;
     const q = norm($("plateInput").value);
     if (!q) {
@@ -241,19 +242,44 @@
     // 뒷자리 4자리만 입력: 오늘 예약 + 지금 유효한 정기 차량 중 그 번호가 한 대뿐이면 그 차량으로 바꿔서 판정
     if (/^\d{4}$/.test(q)) {
       const seen4 = new Set();
-      const cands = rows.filter((r) => r.d === today0 && last4(r.p) === q).map((r) => ({ p: r.p, r }))
+      let cands = rows.filter((r) => r.d === today0 && last4(r.p) === q).map((r) => ({ p: r.p, r }))
         .concat(activeRegs().filter((r) => last4(r.p) === q).map((r) => ({ p: r.p, reg: true })))
         .filter((c) => { const k = c.p.replace(/^[가-힣]{2}(?=\d)/, ""); return !seen4.has(k) && seen4.add(k); });
-      if (cands.length === 1) {
-        $("plateInput").value = pretty(cands[0].p);
-        lastShown = cands[0].p; lastShownAt = Date.now();
+      const btn = (c) => `<button type="button" class="suggest-btn" data-plate="${esc(c.p)}"><span class="mini-plate">${esc(pretty(c.p))}</span><span>${c.reg ? "정기 차량" : esc(slotLabel(c.r)) + (c.r.d === today0 ? "" : " · " + esc(fmtDate(c.r.d)))}</span></button>`;
+      // 카메라: 앞자리 숫자까지 같은 차만 인정 (정기 차량이 많아 뒷자리만 같은 다른 차가 흔함)
+      let pick = cands, camNote = "";
+      if (cam) {
+        const frontOf = (p) => { const m = norm(p).replace(/^[가-힣]{2}(?=\d)/, "").match(/^(\d{2,3})/); return m ? m[1] : ""; };
+        const fr = cam.fronts || [];
+        if (fr.length) {
+          pick = cands.filter((c) => fr.indexOf(frontOf(c.p)) >= 0);
+          if (!pick.length) {
+            lastQuery = q;
+            showResult("bad", `<div class="verdict"><span class="dot"></span>${evMode() ? `오늘 ${esc(scope.title)} 예약이 아닙니다` : "오늘 예약이 아닙니다"}</div>` +
+              `<div class="sub">카메라가 읽은 번호: <b>${esc(fr[0])}□ ${esc(q)}</b> (가운데 글자는 못 읽음). 오늘 예약과 정기 차량 중에 없어요.</div>` +
+              (cands.length ? `<div class="sub">앞자리를 잘못 읽었다면 아래에서 고르세요. 뒷자리가 같은 차량:</div><div class="suggest">${cands.slice(0, 6).map(btn).join("")}</div>` : "") +
+              `<div class="sub">현재 시각 ${nowHHMM()}</div>`);
+            return;
+          }
+          camNote = `카메라가 가운데 글자를 못 읽어 숫자(${esc(fr[0])}□ ${esc(q)})로 찾은 차량이에요. 번호판과 같은지 확인해 주세요.`;
+        } else if (cands.length) {
+          // 앞자리를 못 읽었으면 자동으로 판정하지 않고 고르게 함
+          lastQuery = q;
+          showResult("info", `<div class="verdict"><span class="dot"></span>뒷자리 ${esc(q)} 차량이 ${cands.length}대 있어요</div>` +
+            `<div class="sub">카메라가 앞자리를 못 읽었어요. 번호판과 같은 차량을 눌러 주세요.</div><div class="suggest">${cands.slice(0, 8).map(btn).join("")}</div>`);
+          return;
+        }
+      }
+      if (pick.length === 1) {
+        $("plateInput").value = pretty(pick[0].p);
+        lastShown = pick[0].p; lastShownAt = Date.now();
         check(silent);
         const v = $("result").querySelector(".verdict");
-        if (v) v.insertAdjacentHTML("afterend", `<div class="sub found4">뒷자리 ${esc(q)}로 찾은 차량이에요. 번호판과 같은지 확인해 주세요.</div>`);
+        if (v) v.insertAdjacentHTML("afterend", `<div class="sub found4">${camNote || `뒷자리 ${esc(q)}로 찾은 차량이에요. 번호판과 같은지 확인해 주세요.`}</div>`);
         return;
       }
       lastQuery = q;
-      const btn = (c) => `<button type="button" class="suggest-btn" data-plate="${esc(c.p)}"><span class="mini-plate">${esc(pretty(c.p))}</span><span>${c.reg ? "정기 차량" : esc(slotLabel(c.r)) + (c.r.d === today0 ? "" : " · " + esc(fmtDate(c.r.d)))}</span></button>`;
+      cands = pick;
       if (cands.length > 1) {
         showResult("info", `<div class="verdict"><span class="dot"></span>뒷자리 ${esc(q)} 차량이 ${cands.length}대예요</div>` +
           `<div class="sub">번호판과 같은 차량을 눌러 주세요.</div><div class="suggest">${cands.slice(0, 8).map(btn).join("")}</div>`);
@@ -1119,9 +1145,11 @@
 
   // 인식 방식 설정(번호판을 편 이미지는 한 줄 읽기, 그 외는 덩어리 읽기)
   let psmNow = "6";
+  const ocrSinks = new Set();   // 읽은 글자를 모아 두는 곳 (번호판 전체가 안 읽힐 때 뒷자리 4자리를 찾는 데 씀)
   async function recognizeAs(w, canvas, psm) {
     if (psm !== psmNow) { await w.setParameters({ tessedit_pageseg_mode: psm }); psmNow = psm; }
     const { data } = await w.recognize(canvas);
+    ocrSinks.forEach((a) => a.push(data.text));
     return data.text;
   }
 
@@ -1160,6 +1188,46 @@
     return cands.find((c) => known.has(c)) || found[0];
   }
 
+  // 번호판 전체는 못 읽었어도 뒷자리 숫자 4자리는 읽힌 경우 (가운데 한글을 잘못 읽는 일이 가장 많음)
+  //  · "12가3456"처럼 한글 바로 뒤 숫자 4자리, 또는 한글이 숫자로 읽혀 "1273456"처럼 숫자만 6~7자리면 끝 4자리
+  //  · 후보가 여럿이면 오늘 예약·정기 차량의 뒷자리와 같은 것을 우선
+  let t4Cache = null, t4Stamp = "";
+  function today4() {
+    const stamp = [store.syncedAt, store.fileAt, store.db.length, store.file.length, store.regDb.length, store.regFile.length, todayStr()].join(":");
+    if (!t4Cache || stamp !== t4Stamp) {
+      const t = todayStr();
+      t4Cache = new Set(allRows().filter((r) => r.d === t).map((r) => last4(r.p)).concat(activeRegs().map((r) => last4(r.p))).filter(Boolean));
+      t4Stamp = stamp;
+    }
+    return t4Cache;
+  }
+  // 반환: { d: 뒷자리 4자리, f: 앞자리 숫자 후보 배열 (못 읽었으면 빈 배열) }
+  function digits4From(text) {
+    const out = [];
+    const scan = (str) => {
+      const re = /(\d{0,3})[가-힣](\d{4})(?!\d)/g; let m;
+      while ((m = re.exec(str))) out.push({ d: m[2], f: m[1].length >= 2 ? [m[1].slice(-3), m[1].slice(-2)].filter((x, i, a) => a.indexOf(x) === i) : [] });
+      // 한글이 안 읽히거나 숫자로 읽혀 숫자만 남은 경우: 6자리 "991000" → 앞 99 · 7자리 "9971000" → 앞 997 또는 99 · 8자리 → 앞 3자리
+      const t = str.match(/^(\d{2,4})(\d{4})$/);
+      if (t) out.push({ d: t[2], f: t[1].length === 2 ? [t[1]] : t[1].length === 3 ? [t[1], t[1].slice(0, 2)] : [t[1].slice(0, 3)] });
+    };
+    String(text).split(/\s+/).forEach((tok) => scan(tok.replace(/[^가-힣0-9]/g, "")));
+    scan(String(text).replace(/[^가-힣0-9]/g, ""));
+    if (!out.length) return null;
+    const k = today4();
+    const best = out.find((x) => k.has(x.d)) || out[0];
+    const f = []; out.forEach((x) => { if (x.d === best.d) x.f.forEach((v) => { if (f.indexOf(v) < 0) f.push(v); }); });
+    return { d: best.d, f };
+  }
+  // 여러 번 읽은 글자에서 하나 고르기: 오늘 예약·정기 차량 뒷자리 우선, 그다음 많이 나온 것
+  function digits4FromAll(texts) {
+    const v = {}, f = {};
+    texts.forEach((t) => { const r = digits4From(t); if (r) { v[r.d] = (v[r.d] || 0) + 1; (f[r.d] = f[r.d] || []).push.apply(f[r.d], r.f); } });
+    const k = today4();
+    const d = Object.keys(v).sort((a, b) => (k.has(b) - k.has(a)) || v[b] - v[a])[0];
+    return d ? { d, f: (f[d] || []).filter((x, i, a) => a.indexOf(x) === i) } : null;
+  }
+
   let workerP = null;
   const getWorker = () => workerP || (workerP = (async () => {
     const w = await Tesseract.createWorker("kor", 1, {
@@ -1180,12 +1248,13 @@
   let stream = null, timer = null, busy = false;
   let camGen = 0;   // 카메라를 켜고 끌 때마다 1씩 증가 — 끄기 전에 시작한 인식 결과는 버림
   let lastShown = "", lastShownAt = 0;
+  let lastD4 = "", lastD4At = 0;   // 뒷자리 4자리로 마지막에 조회한 번호
   let avgMs = 0;                // 한 번 읽는 데 걸리는 평균 시간
   // 실시간 인식 상태
   //  recent: 최근 5프레임 인식 결과 {p: 번호, cw: 화면 가운데 정도} (흔들림 방지·확정용)
   //  missed: 최근에 못 읽은 후보 자리 → 다음 프레임에 다른 후보부터 · textHit: 최근에 글자 줄 찾기로 읽혔는지
   //  frameNo·tryIdx·bestVariant·missStreak: 가운데 띠 보정 방법 돌리기 · usedFlat: 번호판을 펴서 읽었는지
-  const newLive = () => ({ recent: [], missed: [], lastConf: null, textHit: false, frameNo: 0, tryIdx: 0, bestVariant: 0, missStreak: 0, usedFlat: false });
+  const newLive = () => ({ recent: [], recent4: [], missed: [], lastConf: null, textHit: false, frameNo: 0, tryIdx: 0, bestVariant: 0, missStreak: 0, usedFlat: false });
   let live = newLive();
 
   function setStatus(t) { $("camStatus").hidden = false; $("camStatus").textContent = t; }
@@ -1207,6 +1276,7 @@
       return;
     }
     camGen++;
+    live = newLive(); lastD4 = "";
     document.body.classList.remove("cam-off");   // 카메라 화면 펼치기
     video.srcObject = stream;
     video.muted = true;
@@ -1355,7 +1425,7 @@
     let vi;
     if (L.frameNo % 4 === 0) vi = L.bestVariant;
     else { L.tryIdx = (L.tryIdx + 1) % VARIANTS.length; if (L.tryIdx === L.bestVariant) L.tryIdx = (L.tryIdx + 1) % VARIANTS.length; vi = L.tryIdx; }
-    let plate = null, plateCw = 1, cd = null, ci = 0, flat = null;
+    let plate = null, plateCw = 1, cd = null, ci = 0, flat = null, d4 = null, d4cw = 0;
     // 1순위: 화면 전체에서 번호판을 찾아 확대·정면 보정해 읽기
     // 글자 줄 찾기는 조금 무거워서 두 프레임에 한 번 (최근에 그 방법으로 읽혔으면 매번)
     const useText = L.frameNo % 2 === 0 || L.textHit;
@@ -1372,18 +1442,23 @@
       flat = rectifyFrom(src, vw, vh, cd.quad);
       if (flat) {
         // 흑백 그림을 읽는 크기를 프레임마다 바꿔 가며(60%·75%·50%) — 한 크기에서 헷갈리는 글자도 다른 크기에서 읽힘
-        plate = await readFlat(w, flat, false, [0.6, 0.75, 0.5][L.frameNo % 3]);
+        const flatTexts = [];
+        ocrSinks.add(flatTexts);
+        try { plate = await readFlat(w, flat, false, [0.6, 0.75, 0.5][L.frameNo % 3]); } finally { ocrSinks.delete(flatTexts); }
         if (plate) L.missed = []; else L.missed.push({ b: bbox(cd.quad), f: L.frameNo });
         L.usedFlat = !!plate;
         // 가운데(번호판 크기 기준) 후보에서 읽힌 번호만 "가운데"로, 나머지는 가장자리처럼 취급(확정에 4번 필요)
         //  · 가운데에 다른 후보가 있는데 가장자리 후보에서 읽힌 번호(옆 차 번호판)는 아예 세지 않음
         plateCw = cd.central !== false ? 1 : cands.some((c) => c !== cd && c.central) ? 0 : 0.45;   // 0.45 = 가장자리
         L.textHit = !!plate && !!cd.text;
+        if (!plate) { d4 = digits4FromAll(flatTexts); d4cw = plateCw; }
       }
     }
     // 2순위: 번호판 후보가 없으면 매번, 후보는 있는데 못 읽었으면 네 프레임에 한 번 — 가운데 띠를 보정 방법을 돌려가며 (무거워서 아껴 씀)
     if (!plate && (!cands.length || L.frameNo % 4 === 3)) {
-      plate = extractPlate(await recognizeAs(w, toOcrCanvas(src, vw, vh, crop, VARIANTS[vi]), "6"));
+      const bandText = await recognizeAs(w, toOcrCanvas(src, vw, vh, crop, VARIANTS[vi]), "6");
+      plate = extractPlate(bandText);
+      if (!plate && !d4) { d4 = digits4From(bandText); d4cw = 0.45; }
       if (plate) { L.bestVariant = vi; L.missStreak = 0; L.usedFlat = false; plateCw = 0.45; }   // 띠 안 어디서 읽혔는지 몰라 가장자리처럼(4번)
       else if (++L.missStreak > 2 * VARIANTS.length) { L.bestVariant = 0; L.missStreak = 0; }
     }
@@ -1405,7 +1480,26 @@
         L.lastConf = { p: plate, central, at: Date.now() };
       }
     }
-    return { read: plateCw > 0 ? plate : null, confirmed, cd, ci, flat, cands: cands.length };
+    // 뒷자리 4자리: 전체 번호가 읽힌 프레임은 그 번호의 뒷자리로 셈
+    if (plate) { const m = norm(plate).replace(/^[가-힣]{2}(?=\d)/, "").match(/^(\d{2,3})[가-힣](\d{4})$/); d4 = m ? { d: m[2], f: [m[1]] } : null; d4cw = plateCw; }
+    L.recent4.push(d4 && d4cw > 0 ? { d: d4.d, f: d4.f, cw: d4cw } : null);
+    if (L.recent4.length > 5) L.recent4.shift();
+    let conf4 = null;
+    if (!confirmed && d4 && d4cw > 0) {
+      const same = L.recent4.filter((x) => x && x.d === d4.d);
+      const cnt = {}; L.recent4.forEach((x) => { if (x && x.d !== d4.d) cnt[x.d] = (cnt[x.d] || 0) + 1; });
+      const rival = Math.max.apply(null, [0].concat(Object.keys(cnt).map((k) => cnt[k])));
+      // 오늘 예약·정기 차량의 뒷자리면 2번(가운데) / 3번(가장자리), 아니면(예약 없는 차일 수 있음) 3번 / 4번
+      const central = same.some((x) => x.cw >= 0.5), known = today4().has(d4.d);
+      const need = (central ? 2 : 3) + (known ? 0 : 1);
+      if (same.length >= need && same.length > rival) {
+        // 앞자리: 여러 프레임에서 읽힌 앞자리 숫자 (두 번 이상 나온 것 우선)
+        const fc = {}; same.forEach((x) => x.f.forEach((v) => { fc[v] = (fc[v] || 0) + 1; }));
+        const fr = Object.keys(fc).sort((a, b) => fc[b] - fc[a]);
+        conf4 = { d: d4.d, f: fr.filter((v) => fc[v] >= 2).length ? fr.filter((v) => fc[v] >= 2) : fr };
+      }
+    }
+    return { read: plateCw > 0 ? plate : null, confirmed, conf4, read4: d4cw > 0 ? d4.d : null, cd, ci, flat, cands: cands.length };
   }
 
   async function scanFrame() {
@@ -1440,22 +1534,44 @@
       const ms = performance.now() - t0;
       avgMs = avgMs ? avgMs * 0.7 + ms * 0.3 : ms;
       const plate = st.confirmed || st.read;
-      if (st.confirmed) {
+      const now4 = Date.now();
+      // 뒷자리로 이미 찾은 차(오늘 예약·정기)를, 같은 뒷자리의 다른 한글로 잘못 읽은 번호가 뒤집지 않게
+      const keepVia4 = st.confirmed && lastShown && lastShown !== st.confirmed && last4(st.confirmed) === last4(lastShown)
+        && lastD4 === last4(st.confirmed) && now4 - lastD4At < 15000 && !knownPlates().has(st.confirmed);
+      if (st.confirmed && !keepVia4) {
         $("camBox").classList.add("found");
         setStatus(`인식: ${pretty(plate)}${live.usedFlat ? " · 원근 보정" : live.bestVariant ? " · " + VARIANTS[live.bestVariant].name + " 보정" : ""}${speedText()}`);
         const now = Date.now();
         if (plate !== lastShown || now - lastShownAt > 15000) {
           lastShown = plate; lastShownAt = now;
+          lastD4 = last4(plate) || ""; lastD4At = now;
           $("plateInput").value = pretty(plate);
           check();
           if (navigator.vibrate) navigator.vibrate(80);
         }
-      } else if (!plate) {
+      } else if (st.conf4 || keepVia4) {
+        // 전체 번호는 아직이지만 뒷자리 4자리가 확실히 읽힘 → 손으로 뒷자리를 친 것과 같이 조회
+        //  (오늘 예약·정기 차량 중 한 대면 그 차로 판정, 여러 대면 고르는 버튼, 없으면 "없어요")
+        const d4 = keepVia4 ? lastD4 : st.conf4.d;
+        $("camBox").classList.add("found");
+        setStatus(`인식: 뒷자리 ${d4}${speedText()}`);
+        // 같은 차가 계속 보이는 동안은 다시 조회하지 않음 (직원이 목록에서 고른 결과를 덮어쓰지 않게)
+        if (!keepVia4 && d4 === lastD4) lastD4At = now4;
+        else if (!keepVia4) {
+          lastD4 = d4; lastD4At = now4;
+          // 같은 차를 방금 전체 번호로 보여 줬으면 다시 조회하지 않음
+          if (!(lastShown && last4(lastShown) === d4 && now4 - lastShownAt < 15000)) {
+            lastShown = ""; $("plateInput").value = d4;
+            check(false, { fronts: st.conf4.f });
+            if (navigator.vibrate) navigator.vibrate(80);
+          }
+        }
+      } else if (!plate && !st.read4) {
         $("camBox").classList.remove("found");
         setStatus(`번호판이 네모 안에 보이게 비춰 주세요 · 멀리서도 돼요${speedText()}`);
         // 차량이 지나가고 15초 동안 번호판이 안 보이면 다음 차량을 위해 대기 상태로
         if ($("result").dataset.s !== "idle" && Date.now() - resultAt > 15000 && document.activeElement !== $("plateInput")) {
-          lastShown = ""; lastQuery = "";
+          lastShown = ""; lastQuery = ""; lastD4 = "";
           showIdle("다음 차량의 번호판이 네모 안에 보이게 비춰 주세요.");
         }
       }
@@ -1486,6 +1602,7 @@
       // 사진은 모든 보정 방법으로 읽어 보고 가장 많이 나온 번호를 고름
       const w = await getWorker();
       const votes = {};
+      const photoTexts = []; photoTexts.photo = true; ocrSinks.add(photoTexts);
       // 1) 사진 전체에서 번호판 후보(최대 4개, 가운데에 가까운 순)를 찾아 확대·정면 보정해 읽기
       //    가운데에서 읽힌 번호일수록 표를 많이 줌 → 옆 차 번호판·간판 속 번호보다 가운데 번호판이 이김
       const cands = findPlateCands(img, img.width, img.height, null, 4);
@@ -1508,14 +1625,27 @@
       let plate = Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0] || null;
       // 번호판 위치를 못 찾고 예전 방식으로만 읽은 번호는 두 가지 이상 보정에서 같게 나와야 인정 (지어낸 번호 방지)
       if (plate && !candHit && votes[plate] < 2 && !knownPlates().has(plate)) plate = null;
+      ocrSinks.delete(photoTexts);
+      // 전체 번호를 못 읽었으면 뒷자리 4자리로: 오늘 예약·정기 차량의 뒷자리이거나 두 번 이상 같게 읽혀야 인정
+      let d4 = null;
+      if (!plate) {
+        const v4 = {};
+        photoTexts.forEach((t) => { const r = digits4From(t); if (r) v4[r.d] = (v4[r.d] || 0) + 1; });
+        d4 = digits4FromAll(photoTexts);
+        if (d4 && !today4().has(d4.d) && v4[d4.d] < 2) d4 = null;
+      }
       if (plate) {
         $("plateInput").value = pretty(plate);
         check();
+      } else if (d4) {
+        $("plateInput").value = d4.d;
+        check(false, { fronts: d4.f });
       } else {
         showResult("bad", `<div class="verdict"><span class="dot"></span>번호판을 찾지 못했어요</div><div class="sub">번호판이 크게 나오도록 다시 찍거나 번호를 직접 입력하세요.</div>`);
       }
     } catch (err) {
       console.error(err);
+      ocrSinks.forEach((a) => { if (a.photo) ocrSinks.delete(a); });
       showResult("bad", `<div class="verdict"><span class="dot"></span>인식 실패</div><div class="sub">다른 사진을 쓰거나 번호를 직접 입력하세요.</div>`);
     } finally {
       $("camLabel").textContent = "사진으로 인식";

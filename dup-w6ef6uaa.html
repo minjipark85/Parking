@@ -94,7 +94,7 @@
           <button type="button" data-by="plate" aria-pressed="false">차량</button>
         </div>
         <select id="dMin" aria-label="최소 예약 횟수">
-          <option value="2">2회 이상</option><option value="3">3회 이상</option><option value="4">4회 이상</option>
+          <option value="1">1회 이상 (전체)</option><option value="2" selected>2회 이상</option><option value="3">3회 이상</option><option value="4">4회 이상</option>
           <option value="5">5회 이상</option><option value="7">7회 이상</option><option value="10">10회 이상</option>
         </select>
         <button type="button" id="dCsv">CSV 저장</button>
@@ -230,7 +230,13 @@
     var rows = data.rows || [], min = +$("dMin").value, unit = by === "plate" ? "대" : "명", today = ymd(new Date());
     filtered = rows.filter(function (x) { return matches(x, q); });
     $("dSum").innerHTML = "<span class=\"muted\">" + esc(periodText()) + " · </span>" + min + "회 이상 <b>" + num(data.count) + "</b>" + unit + (q ? " 중 검색 결과 <b>" + num(filtered.length) + "</b>" + unit : "");
-    if (!filtered.length) { $("dList").innerHTML = '<p class="muted">' + (q ? "찾는 결과가 없어요." : "해당하는 " + (by === "plate" ? "차량이" : "사람이") + " 없어요.") + "</p>"; $("dMore").hidden = true; return; }
+    if (!filtered.length) {
+      // 2회 이상으로 보고 있을 때 검색 결과가 없으면, 한 번만 예약한 사람까지 찾을 수 있게 안내
+      var hint = q && min > 1 ? ' <button type="button" class="small" id="dAllMin">1회 이상으로 다시 찾기</button>' : "";
+      $("dList").innerHTML = '<p class="muted">' + (q ? min + "회 이상 중에는 찾는 결과가 없어요." : "해당하는 " + (by === "plate" ? "차량이" : "사람이") + " 없어요.") + hint + "</p>"; $("dMore").hidden = true;
+      if (hint) $("dAllMin").addEventListener("click", function () { $("dMin").value = "1"; load(); });
+      return;
+    }
     $("dList").innerHTML = filtered.slice(0, shown).map(function (x, i) {
       var who;
       if (by === "plate") {

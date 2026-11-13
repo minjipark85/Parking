@@ -85,13 +85,26 @@
   var blockedOf = function (v) { for (var i = 0; i < BLOCKED.length; i++) if (BLOCKED[i].date === v) return BLOCKED[i]; return null; };
   var isFull = function (v) { return FULL.indexOf(v) >= 0; };
   var schedOf = function (v) { for (var i = 0; i < SCHED.length; i++) if (SCHED[i].date === v) return SCHED[i]; return null; };
+  // 접속자가 몰려 서버가 바쁠 때: 오류가 나면 "새로고침" 대신 간격을 점점 늘려 자동으로 다시 시도 (5초 → 10초 → … 최대 1분, 사람마다 조금씩 다르게)
+  var retryT = {}, retryN = {};
+  function retryLater(key, fn) {
+    clearTimeout(retryT[key]);
+    var n = retryN[key] = (retryN[key] || 0) + 1, wait = Math.min(60, 5 * Math.pow(2, n - 1)) * (0.7 + Math.random() * 0.6);
+    retryT[key] = setTimeout(fn, wait * 1000);
+    return Math.round(wait);
+  }
+  var rareAt = 0, rareData = [[], []];                      // 공개 예정·예약 불가일 (자주 바뀌지 않음 → 10분마다)
   function loadDates() {
     if (!sb) { renderDates(); return Promise.resolve(); }
-    var soft = function (fn) { return sb.rpc(fn).then(function (r) { return r.error ? [] : (r.data || []); }, function () { return []; }); };
-    var upcoming = soft("apply_upcoming_dates"), blocked = soft("apply_blocked_dates"), full = soft("apply_full_dates");
-    return Promise.all([sb.rpc("apply_open_dates"), upcoming, blocked, full]).then(function (both) {
+    var soft = function (fn) { return sb.rpc(fn).then(function (r) { if (r.error) throw r.error; return r.data || []; }); };
+    var fresh = Date.now() - rareAt > 10 * 60 * 1000;
+    var rare = fresh ? Promise.all([soft("apply_upcoming_dates"), soft("apply_blocked_dates")]).then(function (v) { rareAt = Date.now(); rareData = v; return v; }, function () { return rareData; }) : Promise.resolve(rareData);
+    var full = soft("apply_full_dates").catch(function () { return FULL.map(function (d) { return { open_date: d }; }); });
+    return Promise.all([sb.rpc("apply_open_dates"), rare, full]).then(function (r3) {
+      var both = [r3[0], r3[1][0], r3[1][1], r3[2]];
       var res = both[0];
       if (res.error) throw res.error;
+      retryN.dates = 0;
       OPEN_LIST = (res.data || []).map(function (r) { return String(r && typeof r === "object" ? r.open_date : r).slice(0, 10); });
       SCHED = both[1].map(function (r) { return { date: String(r.open_date).slice(0, 10), at: new Date(String(r.opens_at).replace(/(\.\d{3})\d+/, "$1")) }; })
         .filter(function (x) { return !isNaN(x.at) && OPEN_LIST.indexOf(x.date) < 0; });
@@ -100,7 +113,8 @@
       FULL = both[3].map(function (r) { return String(r && typeof r === "object" ? r.open_date : r).slice(0, 10); });
       clearTimeout(openTimer);
       var next = SCHED.reduce(function (m, x) { return !m || x.at < m ? x.at : m; }, null);
-      if (next) openTimer = setTimeout(loadDates, Math.min(2147483000, Math.max(1000, next - new Date() + 1500)));
+      // 공개 시각에 모든 화면이 한꺼번에 묻지 않게 0~20초 사이로 흩어서 다시 불러옴
+      if (next) openTimer = setTimeout(loadDates, Math.min(2147483000, Math.max(1000, next - new Date() + 1500 + Math.random() * 20000)));
       datesLoaded = true;
       // 처음 고를 날짜: 자리가 남은 열린 날 → 열린 날 → 공개 예정일
       if (!dateOpen(selDate) && !schedOf(selDate)) {
@@ -110,7 +124,8 @@
       loadSlots();
     }).catch(function (e) {
       console.error(e);
-      $("dateStrip").innerHTML = '<p class="muted">예약 가능한 날짜를 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.</p>';
+      var w = retryLater("dates", loadDates);
+      if (!datesLoaded) $("dateStrip").innerHTML = '<p class="muted">접속자가 많아 날짜를 불러오지 못했어요. ' + w + '초 뒤 자동으로 다시 불러올게요. 새로고침하지 않고 기다려 주세요.</p>';
     });
   }
   // 공개 시각 "10/21(수) 14시 오픈" (한국 시간 기준)
@@ -165,7 +180,7 @@
   }
 
   // ---------- 2. 시간대 (남은 자리) ----------
-  var slotsReq = 0;
+  var slotsReq = 0, slotsFor = "";                    // slotsFor: 지금 화면의 현황이 어느 날짜 것인지
   function loadSlots() {
     if (!selDate) return;
     if (!sb) { renderSlots(null); return; }
@@ -174,6 +189,7 @@
     sb.rpc("slot_availability", { p_date: selDate }).then(function (res) {
       if (my !== slotsReq) return;
       if (res.error) throw res.error;
+      retryN.slots = 0; slotsFor = selDate;
       avail = {};
       // 좌석 수 비공개(관리자 설정)면 cap·booked 는 비어 오고, 막대 비율(fill)과 상태(state)만 옴
       res.data.forEach(function (r) {
@@ -185,7 +201,9 @@
       renderSlots(avail);
     }).catch(function (e) {
       console.error(e);
-      $("slotList").innerHTML = '<p class="muted">예약 현황을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.</p>';
+      if (my !== slotsReq) return;
+      var w = retryLater("slots", loadSlots);
+      if (slotsFor !== selDate) $("slotList").innerHTML = '<p class="muted">접속자가 많아 예약 현황을 불러오지 못했어요. ' + w + '초 뒤 자동으로 다시 불러올게요.</p>';
     }).then(function () { $("slotList").removeAttribute("aria-busy"); });
   }
   function slotPast(s) {
@@ -282,13 +300,35 @@
         $("fPlate").value = ""; selSlot = ""; $("fAgree").checked = false;
         show("done");
       })
-      .catch(function (err) { console.error(err); setError("신청하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요."); })
+      .catch(function (err) { console.error(err); setError("접속자가 많아 신청이 전달되지 않았어요. 잠시 후 다시 눌러 주세요. (같은 차량이 두 번 예약되지는 않아요)"); })
       .then(function () { delete btn.dataset.busy; btn.disabled = false; btn.textContent = "예약 신청"; updateSummary(); });
   });
 
   // ---------- 내 예약 확인·취소 ----------
   // 행사(세민전 등) 예약은 그 행사의 시간대(시작~끝)로 보여 줌
   var mySlot = function (r) { return r.reserve_end ? String(r.reserve_time).slice(0, 5) + " ~ " + String(r.reserve_end).slice(0, 5) : slotLabel(r.reserve_time); };
+
+  // 지난 예약(이용 시간이 끝난 예약)인지: 날짜 + 끝나는 시각(명수당은 시작 + 3시간)
+  function endMs(r) {
+    var d = String(r.reserve_date).slice(0, 10), s = String(r.reserve_time).slice(0, 5), e = String(r.reserve_end || "").slice(0, 5);
+    var t = new Date(d + "T" + (e && e > s ? e : s) + ":00+09:00").getTime();
+    return e && e > s ? t : t + 3 * 3600000;
+  }
+  function splitMine(list) {
+    var now = Date.now(), up = [], past = [];
+    list.forEach(function (r) { (now >= endMs(r) ? past : up).push(r); });
+    past.reverse();                                   // 지난 예약은 최근 것부터
+    return { up: up, past: past };
+  }
+  function pastItem(r, when) {
+    return '<div class="my-item past"><span class="when">' + dateLabel(String(r.reserve_date)) + ' · ' + when + (r.event ? ' <span class="ev-tag">' + esc(r.event) + '</span>' : "") + '</span>' +
+      '<span class="acts"><span class="done-tag">이용 종료</span></span>' +
+      '<span class="meta"><span class="mini-plate" style="font-size:15px">' + esc(r.plate) + '</span> · 예약번호 <span class="mono">' + esc(r.code) + '</span></span></div>';
+  }
+  function pastBlock(past, whenOf) {
+    if (!past.length) return "";
+    return '<div class="past-head">지난 예약 <span>' + past.length + '건</span></div>' + past.map(function (r) { return pastItem(r, whenOf(r)); }).join("");
+  }
   function loadMine() {
     var plate = norm($("mPlate").value), phone = digits($("mPhone").value);
     $("mineError").textContent = "";
@@ -298,8 +338,10 @@
     $("mineBtn").disabled = true;
     sb.rpc("my_reservations", { p_plate: plate, p_phone: phone }).then(function (res) {
       if (res.error) throw res.error;
-      if (!res.data.length) { $("mineList").innerHTML = '<p class="muted">앞으로 예정된 예약이 없어요. 차량번호와 연락처가 신청할 때와 같은지 확인해 주세요.</p>'; return; }
-      $("mineList").innerHTML = res.data.map(function (r) {
+      if (!res.data.length) { $("mineList").innerHTML = '<p class="muted">예약 내역이 없어요. 차량번호와 연락처가 신청할 때와 같은지 확인해 주세요.</p>'; return; }
+      // 앞으로 이용할 예약을 먼저, 이용 시간이 끝난 예약은 아래에 회색으로
+      var sp = splitMine(res.data);
+      $("mineList").innerHTML = (sp.up.length ? "" : '<p class="muted">앞으로 예정된 예약이 없어요.</p>') + sp.up.map(function (r) {
         // 예약한 시간대가 시작됐으면 취소 버튼 대신 안내
         var startAt = new Date(String(r.reserve_date).slice(0, 10) + "T" + String(r.reserve_time).slice(0, 5) + ":00+09:00");
         var started = Date.now() >= startAt.getTime();
@@ -307,7 +349,7 @@
           '<span class="acts"><button type="button" class="to-pass">확인증</button>' + (started ? '<span class="no-cancel" title="' + CANCEL_STARTED + '">취소 불가</span>' : '<button type="button" class="cancel">취소</button>') + '</span>' +
           (started ? '<span class="started-note">' + CANCEL_STARTED + '</span>' : '') +
           '<span class="meta"><span class="mini-plate" style="font-size:15px">' + esc(r.plate) + '</span> · 예약번호 <span class="mono">' + esc(r.code) + '</span></span></div>';
-      }).join("");
+      }).join("") + pastBlock(sp.past, mySlot);
     }).catch(function (e) { console.error(e); $("mineError").textContent = "조회하지 못했어요. 잠시 후 다시 시도해 주세요."; })
       .then(function () { $("mineBtn").disabled = false; });
   }
@@ -345,7 +387,8 @@
     show("mine");
     if (q.p && q.t) loadMine();
   })();
-  // 남은 자리 30초마다, 열린 날짜(관리자가 새로 열거나 공개 시각이 된 날)는 1분마다 새로 불러옴
-  setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadSlots(); }, 30000);
-  setInterval(function () { if (!$("applyView").hidden && !document.hidden) loadDates(); }, 60000);
+  // 남은 자리 1분마다, 열린 날짜(관리자가 새로 열거나 공개 시각이 된 날)는 3분마다 새로 불러옴
+  // (접속이 몰려도 서버가 버티도록 간격을 넉넉히 · 사람마다 조금씩 어긋나게)
+  setInterval(function () { if (!$("applyView").hidden && !document.hidden) setTimeout(loadSlots, Math.random() * 15000); }, 60000);
+  setInterval(function () { if (!$("applyView").hidden && !document.hidden) setTimeout(loadDates, Math.random() * 30000); }, 180000);
 })();

@@ -170,3 +170,13 @@ button.pass-go { width: 100%; margin-bottom: 10px; }
   .slot .bar { width: 100%; }
   .submit-bar { position: static; border-top: 0; background: transparent; }
 }
+
+/* ---------- 내 예약 확인: 지난 예약 (회색 음영, 맨 아래) ---------- */
+.past-head { display: flex; align-items: center; gap: 6px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--muted); }
+.past-head span { font-weight: 600; }
+.my-item.past { margin-top: 8px; padding: 12px 14px; border-top: 0; border-radius: 12px; background: rgba(120, 124, 132, .12); color: var(--muted); }
+.past-head + .my-item.past { margin-top: 10px; }
+.my-item.past .when { color: var(--muted); font-weight: 600; }
+.my-item.past .mini-plate { filter: grayscale(1); opacity: .55; }
+.my-item.past .ev-tag { background: rgba(120, 124, 132, .18); color: var(--muted); }
+.my-item.past .done-tag { display: inline-flex; align-items: center; min-height: 32px; padding: 0 10px; border-radius: 99px; background: rgba(120, 124, 132, .18); font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
